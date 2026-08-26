@@ -1,7 +1,7 @@
 //! System-tray (menu bar) icon and its menu, plus the app's state holder that
 //! keeps the tray alive for the lifetime of the app.
 
-use tauri::menu::{Menu, MenuItem};
+use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent};
 use tauri::{App, AppHandle, Manager};
 
@@ -18,11 +18,22 @@ fn show_main(app: &AppHandle) {
     }
 }
 
+/// Reload the dsh web UI in the main window without restarting dsh.
+fn reload_main(app: &AppHandle) {
+    if let Some(win) = app.get_webview_window("main") {
+        let _ = win.eval("window.location.reload()");
+    }
+}
+
 /// Build the tray icon + menu and register it in the app's managed state.
 pub fn setup(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
     let show = MenuItem::with_id(app, "show", "Show dsh Window", true, None::<&str>)?;
+    let reload = MenuItem::with_id(app, "reload", "Reload Page", true, None::<&str>)?;
+    let restart = MenuItem::with_id(app, "restart", "Restart", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "Quit dsh Desktop", true, None::<&str>)?;
-    let menu = Menu::with_items(app, &[&show, &quit])?;
+    let sep = PredefinedMenuItem::separator(app)?;
+
+    let menu = Menu::with_items(app, &[&show, &reload, &restart, &sep, &quit])?;
 
     let icon = app.default_window_icon().map(|i| i.clone());
 
@@ -31,6 +42,8 @@ pub fn setup(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
         .show_menu_on_left_click(false)
         .on_menu_event(|app_handle, event| match event.id().as_ref() {
             "show" => show_main(app_handle),
+            "reload" => reload_main(app_handle),
+            "restart" => app_handle.request_restart(),
             "quit" => app_handle.exit(0),
             _ => {}
         })

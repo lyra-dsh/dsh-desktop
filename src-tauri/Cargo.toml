@@ -1,6 +1,6 @@
 [package]
 name = "dsh-desktop"
-version = "0.1.1"
+version = "0.1.0"
 description = "Wrap the dsh CLI as a Tauri v2 macOS desktop app"
 authors = ["omnilyra"]
 edition = "2021"
