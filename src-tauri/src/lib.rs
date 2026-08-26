@@ -4,11 +4,14 @@
 //! At startup we read an optional JSON config, spawn `dsh --profile <profile>
 //! --no-open` with a controlled environment, wait until the web server answers,
 //! then create a WebView window pointed at the loopback URL. Closing the window
-//! (or the app) kills the whole dsh process group.
+//! (X) hides it while the app keeps running behind a menu-bar (tray) icon; dsh
+//! keeps serving. Quitting is done via the tray menu or Cmd+Q, which then kills
+//! the whole dsh process group.
 
 pub mod config;
 pub mod dsh;
 pub mod state;
+pub mod tray;
 
 use std::sync::mpsc;
 use std::sync::Arc;
@@ -70,6 +73,10 @@ pub fn run() {
             let mut child = dsh::spawn(&cfg, &bin).map_err(setup_err)?;
             let pid = child.id();
             app.manage(DshState::new(pid));
+
+            // System tray: keep the app alive behind the menu-bar icon, and let
+            // the user restore or quit from there.
+            tray::setup(app)?;
 
             let handle = app.handle().clone();
 
@@ -180,12 +187,13 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| {
-            if let WindowEvent::CloseRequested { .. } = event {
-                if window.label() == "main" {
-                    if let Some(state) = window.try_state::<DshState>() {
-                        state.kill();
-                    }
-                    window.app_handle().exit(0);
+            if window.label() == "main" {
+                // Close (X) hides the window instead of quitting: the app keeps
+                // running behind the tray icon. Quit via the tray menu or Cmd+Q,
+                // which exits the app and then kills the dsh process group.
+                if let WindowEvent::CloseRequested { api, .. } = event {
+                    api.prevent_close();
+                    let _ = window.hide();
                 }
             }
         })

@@ -6,8 +6,10 @@ runs as a native desktop app instead of a browser tab.
 
 On launch the app spawns `dsh` as a child process, waits until its web server
 is listening on `127.0.0.1`, then loads that URL in a WebView window. Closing the
-window (or the app) terminates the whole dsh process group. The default profile
-is `web`.
+window (X) **hides** it and the app keeps running behind a menu-bar (tray) icon —
+click it to bring the window back, or use its menu to Show / Quit. dsh is only
+terminated when the app actually quits (tray menu "Quit" or Cmd+Q). The default
+profile is `web`.
 
 ## Prerequisites
 

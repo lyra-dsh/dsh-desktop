@@ -1,6 +1,6 @@
 {
   "name": "dsh-desktop",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Wrap the dsh CLI as a Tauri v2 macOS desktop app (loads the dsh web UI in a native window).",
   "private": true,
   "type": "module",
