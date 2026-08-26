@@ -1,0 +1,8 @@
+{
+  "profile": "web",
+  "dshBin": null,
+  "host": "127.0.0.1",
+  "port": null,
+  "openBrowser": false,
+  "extraArgs": []
+}

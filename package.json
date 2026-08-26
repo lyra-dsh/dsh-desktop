@@ -1,0 +1,16 @@
+{
+  "name": "dsh-desktop",
+  "version": "0.1.0",
+  "description": "Wrap the dsh CLI as a Tauri v2 macOS desktop app (loads the dsh web UI in a native window).",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "tauri": "node node_modules/@tauri-apps/cli/tauri.js",
+    "dev": "node node_modules/@tauri-apps/cli/tauri.js dev",
+    "build": "node node_modules/@tauri-apps/cli/tauri.js build",
+    "icons": "sips -s format png src-tauri/icon.icns --out /tmp/dsh-desktop-icon.png && node node_modules/@tauri-apps/cli/tauri.js icon /tmp/dsh-desktop-icon.png"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2"
+  }
+}

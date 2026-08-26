@@ -1,0 +1,9 @@
+{
+  "identifier": "default",
+  "description": "Default capability for the dynamically created main window (used for the error dialog + live reload).",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "dialog:default"
+  ]
+}

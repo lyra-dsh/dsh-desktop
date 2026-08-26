@@ -1,0 +1,19 @@
+# node
+node_modules
+.pnpm-store
+
+# tauri / rust build output
+src-tauri/target
+src-tauri/gen
+# tauri icon regenerates mobile-only sets we don't need
+src-tauri/icons/android
+src-tauri/icons/ios
+
+# local rust registry cache used by this sandbox
+.cargo-home
+
+# local config override (committed example lives in config.example.json)
+config.json
+
+# os
+.DS_Store
