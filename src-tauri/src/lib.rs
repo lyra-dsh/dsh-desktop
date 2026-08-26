@@ -19,6 +19,7 @@ use std::sync::Mutex;
 use std::time::Duration;
 use tauri::Manager;
 use tauri::RunEvent;
+use tauri::webview::NewWindowResponse;
 use tauri::WebviewUrl;
 use tauri::WebviewWindowBuilder;
 use tauri::WindowEvent;
@@ -30,6 +31,61 @@ fn setup_err(msg: String) -> Box<dyn std::error::Error> {
     Box::new(std::io::Error::other(msg))
 }
 
+/// Hand a URL to the OS, which opens it with the default browser / app
+/// (cross-platform via `tauri-plugin-opener`).
+fn open_in_browser(app: &tauri::AppHandle, url: &str) {
+    use tauri_plugin_opener::OpenerExt;
+    if let Err(e) = app.opener().open_url(url, None::<&str>) {
+        eprintln!("dsh-desktop: open {url}: {e}");
+    }
+}
+
+/// Injected into the dsh web page (runs before its own scripts) to route
+/// "open a new tab" style links to the system browser via the opener plugin,
+/// without touching in-app (same-origin) navigation or iframe loads.
+const EXTERNAL_LINKS_SCRIPT: &str = r#"
+(function () {
+  function openInBrowser(url) {
+    try {
+      window.__TAURI_INTERNALS__.invoke('plugin:opener|open_url', { url: url }).catch(function (e) {
+        console.error('[dsh-desktop] open_url failed:', e);
+      });
+    } catch (e) {
+      console.error('[dsh-desktop] open_url failed:', e);
+    }
+  }
+
+  // window.open -> system browser
+  try {
+    var nativeOpen = window.open;
+    window.open = function (url) {
+      if (typeof url === 'string' && url.length > 0) {
+        openInBrowser(url);
+        return null;
+      }
+      return nativeOpen.apply(window, arguments);
+    };
+  } catch (e) {}
+
+  // Clicks: target="_blank" / modifier clicks are left to the native
+  // on_new_window handler; plain external-origin links are sent to the browser
+  // here so same-origin (SPA) navigation is never disturbed.
+  document.addEventListener('click', function (e) {
+    var el = e.target && e.target.closest ? e.target.closest('a[href]') : null;
+    if (!el) return;
+    var href = el.getAttribute('href');
+    if (!href) return;
+    var url;
+    try { url = new URL(href, window.location.href); } catch (err) { return; }
+    if (el.target === '_blank' || e.metaKey || e.ctrlKey || e.shiftKey) return;
+    if (url.origin !== window.location.origin) {
+      e.preventDefault();
+      openInBrowser(url.href);
+    }
+  }, true);
+})();
+"#;
+
 /// Build the main window pointed at the resolved loopback URL. Must run on the
 /// main thread (enforced by the caller via `run_on_main_thread`).
 fn build_webview(app: &tauri::AppHandle, url: String) {
@@ -40,10 +96,18 @@ fn build_webview(app: &tauri::AppHandle, url: String) {
             return;
         }
     };
+    let handle_new_window = app.clone();
     let window = WebviewWindowBuilder::new(app, "main", WebviewUrl::External(parsed))
         .title("dsh")
         .inner_size(1280.0, 800.0)
-        .min_inner_size(800.0, 600.0);
+        .min_inner_size(800.0, 600.0)
+        .initialization_script(EXTERNAL_LINKS_SCRIPT)
+        .on_new_window(move |url, _features| {
+            // target="_blank" / window.open (incl. inside iframes): open in the
+            // system browser instead of trying to spawn a WebView "tab".
+            open_in_browser(&handle_new_window, url.as_str());
+            NewWindowResponse::Deny
+        });
     if let Err(e) = window.build() {
         eprintln!("dsh-desktop: failed to build main window: {e}");
     }
@@ -65,6 +129,7 @@ fn show_error(app: &tauri::AppHandle, detail: String) {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             let cfg = config::load_for_app().map_err(setup_err)?;
 

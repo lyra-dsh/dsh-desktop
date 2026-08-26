@@ -1,9 +1,13 @@
 {
   "identifier": "default",
-  "description": "Default capability for the dynamically created main window (used for the error dialog + live reload).",
+  "description": "Default capability for the main window. remote.urls lets the dsh web page (loaded over http://127.0.0.1) call the opener plugin so external links can be opened in the system browser.",
   "windows": ["main"],
+  "remote": {
+    "urls": ["http://127.0.0.1:*", "http://localhost:*"]
+  },
   "permissions": [
     "core:default",
-    "dialog:default"
+    "dialog:default",
+    "opener:default"
   ]
 }

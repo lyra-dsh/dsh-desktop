@@ -10,7 +10,11 @@ window (X) **hides** it and the app keeps running behind a menu-bar (tray) icon.
 The tray menu offers **Show**, **Reload Page** (reload the web UI without
 restarting dsh), **Restart** (relaunch the app, restarting dsh too), and **Quit**;
 a single left-click on the tray icon also brings the window back. dsh is only
-terminated when the app actually quits or restarts. The default profile is `web`.
+terminated when the app actually quits or restarts. External links are opened in
+your default browser instead of inside the window: `target="_blank"` /
+`window.open` requests are redirected to the browser, and top-level navigations
+to non-loopback `http(s)` addresses are handed off too. The default profile is
+`web`.
 
 ## Prerequisites
 
@@ -82,6 +86,11 @@ homebrew, and the system dirs, so `node` and friends are reachable.
   with a fallback that probes `127.0.0.1:<port>` for the default/configured port
   (used when `port: 0` cannot be known in advance).
 - `--no-open` is appended unless `openBrowser` is true.
+- External links are opened in the OS default browser via `tauri-plugin-opener`
+  (cross-platform): a small script injected into the dsh page routes
+  external-origin links and `window.open` to the browser, and native
+  new-window requests (`target="_blank"`, incl. inside iframes) are redirected
+  too. Same-origin (in-app) navigation and iframe loads are left untouched.
 - macOS ATS local networking is enabled via `src-tauri/Info.plist`
   (`NSAllowsLocalNetworking`) so `http://127.0.0.1` loads in the WebView.
 - The canonical app icon is `src-tauri/icon.icns`. All other formats (PNG sizes,
