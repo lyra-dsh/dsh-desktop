@@ -82,9 +82,13 @@ homebrew, and the system dirs, so `node` and friends are reachable.
 - The `build.frontendDist` is a placeholder only: the actual UI is the dsh web
   server. The window is created **after** readiness, pointed at the resolved
   `http://127.0.0.1:<port>`.
-- Readiness is detected from dsh's stdout (`dsh web: http://127.0.0.1:<port>`),
-  with a fallback that probes `127.0.0.1:<port>` for the default/configured port
-  (used when `port: 0` cannot be known in advance).
+- Readiness is detected from dsh's stdout (`dsh web: http://127.0.0.1:<port>/?token=…`).
+  dsh web ≥ v0.1.2 authenticates the browser UI with a per-process launch token
+  carried in the URL query, so the app captures the full URL (token included) and
+  loads it once — the server then mints a persistent cookie and redirects to `/`.
+  A fallback probes `127.0.0.1:<port>` for the default/configured port (used when
+  `port: 0` cannot be known in advance); note that fallback URL has no token and
+  therefore cannot authenticate.
 - `--no-open` is appended unless `openBrowser` is true.
 - External links are opened in the OS default browser via `tauri-plugin-opener`
   (cross-platform): a small script injected into the dsh page routes

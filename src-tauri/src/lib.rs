@@ -169,7 +169,13 @@ pub fn run() {
                 use std::io::BufRead;
                 let tx = ready_tx.clone();
                 std::thread::spawn(move || {
-                    let re = regex::Regex::new(r"http://127\.0\.0\.1:\d+").unwrap();
+                    // dsh web v0.1.2+ authenticates the browser UI with a
+                    // per-process launch token carried in the URL query, e.g.
+                    //   dsh web: http://127.0.0.1:3080/?token=<base64url> (LAN: ...)
+                    // Capture the whole URL (including `?token=…`) up to the
+                    // next whitespace, so the window opens authenticated
+                    // instead of hitting the 401 "authentication required" page.
+                    let re = regex::Regex::new(r"http://127\.0\.0\.1:\d+\S*").unwrap();
                     let reader = std::io::BufReader::new(out);
                     let mut sent = false;
                     for line in reader.lines() {

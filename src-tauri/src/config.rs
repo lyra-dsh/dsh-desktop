@@ -30,6 +30,10 @@ pub struct Config {
     pub open_browser: bool,
     /// Extra dsh CLI arguments appended verbatim (e.g. `--trusted-host app.internal`).
     pub extra_args: Vec<String>,
+    /// Which editor the injected file-link picker uses to open a code path:
+    /// a stable editor id (`system` for the OS default application, `finder`
+    /// to reveal in Finder) or an app id from `list_editors`. `null` = `system`.
+    pub editor: Option<String>,
 }
 
 impl Default for Config {
@@ -41,6 +45,7 @@ impl Default for Config {
             port: None,
             open_browser: false,
             extra_args: Vec::new(),
+            editor: None,
         }
     }
 }
