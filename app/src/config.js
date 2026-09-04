@@ -16,8 +16,9 @@ const DEFAULT_CONFIG = Object.freeze({
   profile: 'web',
   dshBin: null,
   host: '127.0.0.1',
-  port: null,
+  port: 0, // 0 = OS 自动分配空闲端口，避免与残留 dsh 撞端口（EADDRINUSE）
   openBrowser: false,
+  notify: true,
   extraArgs: [],
   editor: null,
 })
@@ -28,7 +29,8 @@ function toCliArgs(cfg) {
   if (cfg.host !== null && cfg.host !== undefined && cfg.host !== '') {
     args.push('--host', cfg.host)
   }
-  if (cfg.port !== null && cfg.port !== undefined && cfg.port !== 0) {
+  // null 才省略 --port（用 dsh 默认端口）；0 必须显式传，让 dsh 自己分配。
+  if (cfg.port !== null && cfg.port !== undefined) {
     args.push('--port', String(cfg.port))
   }
   if (!cfg.openBrowser) {

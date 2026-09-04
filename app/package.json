@@ -1,0 +1,69 @@
+{
+  "name": "dsh-desktop",
+  "version": "0.2.0",
+  "description": "A generic Electron desktop shell for any dsh. Zero dsh runtime dependency: it detects a system dsh, or installs a private copy into userData at first launch.",
+  "private": true,
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron .",
+    "package:dir": "electron-builder --dir",
+    "build": "electron-builder --mac",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "@omnilyra/desktop-protocol": "*",
+    "@omnilyra/desktop-host": "*",
+    "@omnilyra/desktop-electron": "*",
+    "@omnilyra/desktop-notifications": "*",
+    "pnpm": "9.10.0"
+  },
+  "devDependencies": {
+    "electron": "44.0.0",
+    "electron-builder": "^26.15.3"
+  },
+  "build": {
+    "appId": "com.omnilyra.dsh.desktop",
+    "productName": "Dsh-Desktop",
+    "asar": true,
+    "npmRebuild": false,
+    "asarUnpack": [
+      "node_modules/**",
+      "build/**"
+    ],
+    "electronFuses": {
+      "runAsNode": true
+    },
+    "files": [
+      "src/**",
+      "build/**",
+      "package.json"
+    ],
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "category": "public.app-category.developer-tools",
+      "minimumSystemVersion": "10.15",
+      "icon": "build/icon.icns",
+      "hardenedRuntime": false
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "build/icon.ico"
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "icon": "build/icon.png"
+    }
+  }
+}

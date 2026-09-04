@@ -1,0 +1,14 @@
+{
+  "name": "@omnilyra/desktop-notifications",
+  "version": "0.1.0",
+  "description": "Desktop feature plugin: native notifications.",
+  "private": true,
+  "main": "src/notifications.js",
+  "files": [
+    "src"
+  ],
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.2",
+    "@omnilyra/desktop-protocol": "*"
+  }
+}

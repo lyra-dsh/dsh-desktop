@@ -1,0 +1,14 @@
+{
+  "name": "@omnilyra/desktop-electron",
+  "version": "0.1.0",
+  "description": "Electron implementation of the DesktopRuntime protocol.",
+  "private": true,
+  "main": "src/index.js",
+  "files": [
+    "src"
+  ],
+  "peerDependencies": {
+    "@omnilyra/desktop-protocol": "*",
+    "electron": ">=28"
+  }
+}

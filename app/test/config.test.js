@@ -13,16 +13,17 @@ test('defaultConfigJson parses and matches defaults', () => {
   assert.strictEqual(cfg.profile, 'web')
   assert.strictEqual(cfg.dshBin, null)
   assert.strictEqual(cfg.host, '127.0.0.1')
-  assert.strictEqual(cfg.port, null)
+  assert.strictEqual(cfg.port, 0)
   assert.strictEqual(cfg.openBrowser, false)
+  assert.strictEqual(cfg.notify, true)
   assert.deepStrictEqual(cfg.extraArgs, [])
   assert.strictEqual(cfg.editor, null)
 })
 
-test('toCliArgs default', () => {
+test('toCliArgs default passes --port 0 (OS-assigned)', () => {
   assert.deepStrictEqual(
     config.toCliArgs({ ...config.DEFAULT_CONFIG }),
-    ['--profile', 'web', '--host', '127.0.0.1', '--no-open'],
+    ['--profile', 'web', '--host', '127.0.0.1', '--port', '0', '--no-open'],
   )
 })
 
@@ -34,8 +35,8 @@ test('toCliArgs with port and extra args and openBrowser', () => {
   )
 })
 
-test('toCliArgs omits zero port', () => {
-  const cfg = { ...config.DEFAULT_CONFIG, port: 0 }
+test('toCliArgs omits --port only when null', () => {
+  const cfg = { ...config.DEFAULT_CONFIG, port: null }
   assert.deepStrictEqual(
     config.toCliArgs(cfg),
     ['--profile', 'web', '--host', '127.0.0.1', '--no-open'],
@@ -59,7 +60,7 @@ test('ensureDefault creates a parseable file and loadFrom round-trips', () => {
     assert.ok(fs.existsSync(file))
     const cfg = config.loadFrom(file)
     assert.strictEqual(cfg.profile, 'web')
-    assert.strictEqual(cfg.port, null)
+    assert.strictEqual(cfg.port, 0)
   } finally {
     fs.rmSync(dir, { recursive: true, force: true })
   }
@@ -73,7 +74,7 @@ test('loadFrom falls back per-key for missing keys', () => {
     const cfg = config.loadFrom(file)
     assert.strictEqual(cfg.profile, 'tui')
     assert.strictEqual(cfg.host, '127.0.0.1')
-    assert.strictEqual(cfg.port, null)
+    assert.strictEqual(cfg.port, 0)
     assert.deepStrictEqual(cfg.extraArgs, [])
   } finally {
     fs.rmSync(dir, { recursive: true, force: true })

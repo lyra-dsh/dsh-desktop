@@ -4,6 +4,7 @@ node_modules
 
 # electron-builder output
 release/
+app/release/
 
 # local config override (committed example lives in config.example.json)
 config.json
