@@ -23,6 +23,9 @@ export interface DesktopNotification {
   sound?: string
 }
 
+/** 托盘图标上的状态点。优先级：error > approval > unread。 */
+export type DesktopBadgeState = 'error' | 'approval' | 'unread'
+
 /** 原生托盘菜单的一项；`submenu` 递归。 */
 export interface DesktopTrayItem {
   /** 稳定 id。点击时壳子只回传 id，由 Host 决定行为。 */

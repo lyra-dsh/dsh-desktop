@@ -117,6 +117,21 @@ parent–child IPC channel (dsh is the shell's child process):
 The plugins live outside dsh's profile bundles, so dsh stays a black-box wrapper —
 system or private. Set `notify: false` to disable.
 
+### Tray status dot
+
+Alongside the OS notification, the menu-bar tray icon shows a small **colored dot**
+as a persistent reminder (system notifications are easy to miss):
+
+| dot | when |
+|---|---|
+| 🔴 red | a turn errored |
+| 🟡 yellow | an approval / question is waiting for you |
+| 🟢 green | a turn completed while the window was out of focus |
+
+Priority is red > yellow > green (only one dot shows). The dot clears as soon as
+you focus the window. The icons live in `app/build/tray-{red,yellow,green}.png`
+(+`@2x`).
+
 ## Development notes
 
 - The window is created **after** readiness, pointed at the resolved

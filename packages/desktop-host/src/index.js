@@ -79,6 +79,9 @@ function createTransportRuntime(transport) {
     // 通知
     notify: (notification) => call('notify', [notification]),
 
+    // 托盘状态点
+    setBadge: (state) => call('setBadge', [state]),
+
     // 对话框
     pickDirectory: (options) => call('pickDirectory', [options]),
     showMessageBox: (options) => call('showMessageBox', [options]),

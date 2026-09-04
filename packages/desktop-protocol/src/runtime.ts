@@ -3,6 +3,7 @@ import type {
   DesktopThemeSource,
   DesktopLocale,
   DesktopNotification,
+  DesktopBadgeState,
   DesktopTrayItem,
   DesktopMessageBoxOptions,
   DesktopMessageBoxResult,
@@ -44,6 +45,10 @@ export interface DesktopRuntime {
 
   // ---- 通知 ----
   notify(notification: DesktopNotification): void
+
+  // ---- 托盘状态点 ----
+  /** 设置托盘图标的红/黄/绿状态点（壳子按优先级取舍并决定何时清除）。 */
+  setBadge(state: DesktopBadgeState): void
 
   // ---- 原生对话框 ----
   pickDirectory(options?: DesktopDirectoryPickerOptions): Promise<string | null>

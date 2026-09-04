@@ -56,6 +56,7 @@ class ElectronDesktopRuntime {
     this.windows = new Map()
     this.listeners = new Set()
     this.notifications = new Set()
+    this.badgeState = 'none'
     this.isQuitting = false
 
     // 用户触发退出（Cmd+Q / 系统退出）→ 上报，由 Host 清理后回 quit()。
@@ -118,6 +119,8 @@ class ElectronDesktopRuntime {
     })
     win.on('show', () => this.emit({ type: 'window/visibility', windowId: 'main', visible: true }))
     win.on('hide', () => this.emit({ type: 'window/visibility', windowId: 'main', visible: false }))
+    // 用户看到窗口（聚焦）→ 清除托盘状态点。
+    win.on('focus', () => this.clearBadge())
 
     // 渲染结果上报。
     win.webContents.once('did-finish-load', () => {
@@ -186,6 +189,43 @@ class ElectronDesktopRuntime {
       this.tray.on('click', () => this.emit({ type: 'tray/activated' }))
     }
     this.tray.setContextMenu(menu)
+  }
+
+  // ---- 托盘状态点（红/黄/绿）----
+  setBadge(state) {
+    const priority = { none: 0, unread: 1, approval: 2, error: 3 }
+    // 未读（绿点）只在用户没在看窗口时才标；正在看就不标。
+    if (state === 'unread' && this._isWindowFocused()) return
+    if ((priority[state] || 0) > (priority[this.badgeState] || 0)) {
+      this.badgeState = state
+      this._updateTrayIcon()
+    }
+  }
+
+  clearBadge() {
+    if (this.badgeState === 'none') return
+    this.badgeState = 'none'
+    this._updateTrayIcon()
+  }
+
+  _isWindowFocused() {
+    const w = this.mainWindow
+    return !!(w && !w.isDestroyed() && w.isFocused())
+  }
+
+  _badgeIconPath(state) {
+    const base = this.config.trayIconPath || ''
+    if (state === 'none') return base
+    const color = { error: 'red', approval: 'yellow', unread: 'green' }[state]
+    return base.replace(/tray\.png$/, `tray-${color}.png`)
+  }
+
+  _updateTrayIcon() {
+    if (!this.tray) return
+    const p = this._badgeIconPath(this.badgeState)
+    if (p && fs.existsSync(p)) {
+      this.tray.setImage(nativeImage.createFromPath(p))
+    }
   }
 
   // ---- 通知 ----
