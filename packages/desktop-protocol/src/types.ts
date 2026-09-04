@@ -19,6 +19,8 @@ export type DesktopLocale = string
 export interface DesktopNotification {
   title: string
   body: string
+  /** macOS 系统提示音名（如 "Ping" / "Basso"）；省略用系统默认音。 */
+  sound?: string
 }
 
 /** 原生托盘菜单的一项；`submenu` 递归。 */

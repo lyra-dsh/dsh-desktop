@@ -246,7 +246,11 @@ function waitForReady(child, cfg, { readyTimeoutMs = READY_TIMEOUT_MS } = {}) {
 
     if (child.stderr) {
       child.stderr.setEncoding('utf8')
-      child.stderr.on('data', (chunk) => { stderrBuf += chunk })
+      child.stderr.on('data', (chunk) => {
+        stderrBuf += chunk
+        // 转发到壳子的 stderr，便于在终端看到 dsh / 插件的日志与错误。
+        process.stderr.write(chunk)
+      })
     }
 
     const detailFromStderr = (fallback) => {

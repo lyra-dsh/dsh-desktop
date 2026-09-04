@@ -55,6 +55,7 @@ class ElectronDesktopRuntime {
     this.tray = null
     this.windows = new Map()
     this.listeners = new Set()
+    this.notifications = new Set()
     this.isQuitting = false
 
     // 用户触发退出（Cmd+Q / 系统退出）→ 上报，由 Host 清理后回 quit()。
@@ -189,9 +190,13 @@ class ElectronDesktopRuntime {
 
   // ---- 通知 ----
   notify(notification) {
+    console.log('[desktop-electron] notify:', notification.title, '| supported:', Notification.isSupported(), '| sound:', notification.sound)
     if (!Notification.isSupported()) return
-    const n = new Notification({ title: notification.title, body: notification.body })
+    const n = new Notification({ title: notification.title, body: notification.body, sound: notification.sound })
     n.once('click', () => this.show())
+    // 保留引用，防止 Notification 对象被 GC 回收导致通知不显示（Electron 经典坑）。
+    this.notifications.add(n)
+    n.once('close', () => this.notifications.delete(n))
     n.show()
   }
 

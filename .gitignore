@@ -11,3 +11,4 @@ config.json
 
 # os
 .DS_Store
+.diag

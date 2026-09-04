@@ -66,10 +66,12 @@ async function boot() {
   // dsh 侧插件（desktop-host）通过 IPC 调壳子能力：invoke → runtime[method](...args)。
   child.on('message', async (msg) => {
     if (!msg || msg.type !== 'invoke') return
+    console.log('[dsh-desktop] invoke:', msg.method, JSON.stringify(msg.args))
     try {
       const value = await runtime[msg.method](...(msg.args || []))
       child.send({ type: 'result', id: msg.id, ok: true, value })
     } catch (error) {
+      console.error('[dsh-desktop] invoke error:', error)
       child.send({
         type: 'result',
         id: msg.id,
