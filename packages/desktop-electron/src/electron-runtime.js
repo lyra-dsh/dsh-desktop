@@ -58,6 +58,8 @@ class ElectronDesktopRuntime {
     this.notifications = new Set()
     this.badgeState = 'none'
     this.keepAwakeId = null
+    this.keepAwakeEnabled = true
+    this.keepAwakeActive = false
     this.isQuitting = false
 
     // 用户触发退出（Cmd+Q / 系统退出）→ 上报，由 Host 清理后回 quit()。
@@ -230,15 +232,32 @@ class ElectronDesktopRuntime {
   }
 
   // ---- 电源 ----
-  setKeepAwake(enabled) {
-    if (enabled) {
-      if (this.keepAwakeId == null) {
-        // prevent-app-suspension：阻止系统休眠（保持网络），但不阻止息屏。
-        this.keepAwakeId = powerSaveBlocker.start('prevent-app-suspension')
-      }
-    } else if (this.keepAwakeId != null) {
+  setKeepAwake(active) {
+    this.keepAwakeActive = active
+    this._applyKeepAwake()
+  }
+
+  /** 托盘 checkbox「防止休眠」点击时切换功能开关（默认开启）。 */
+  toggleKeepAwake() {
+    this.keepAwakeEnabled = !this.keepAwakeEnabled
+    this._applyKeepAwake()
+  }
+
+  isKeepAwakeEnabled() {
+    return this.keepAwakeEnabled
+  }
+
+  _applyKeepAwake() {
+    const shouldBlock = this.keepAwakeEnabled && this.keepAwakeActive
+    if (shouldBlock && this.keepAwakeId == null) {
+      // prevent-app-suspension：阻止系统休眠（保持网络），但不阻止息屏。
+      this.keepAwakeId = powerSaveBlocker.start('prevent-app-suspension')
+    } else if (!shouldBlock && this.keepAwakeId != null) {
       powerSaveBlocker.stop(this.keepAwakeId)
       this.keepAwakeId = null
+    }
+    if (this.tray) {
+      this.tray.setToolTip(shouldBlock ? `${this.config.productName} — 运行中（防止休眠）` : this.config.productName)
     }
   }
 

@@ -141,6 +141,10 @@ from sleeping — so the network stays up during long agent runs. The screen may
 still turn off. This uses Electron's `powerSaveBlocker` (`prevent-app-suspension`):
 it starts on the first `turn/start` and stops after the last `turn/end`.
 
+The tray menu has a **防止休眠** checkbox (on by default): uncheck it to disable
+the behavior entirely. The tray tooltip shows **运行中（防止休眠）** while a run is
+actually keeping the machine awake.
+
 ## Development notes
 
 - The window is created **after** readiness, pointed at the resolved

@@ -82,13 +82,15 @@ async function boot() {
   })
 
   // 托盘菜单：只定义 id，点击由壳子回传 id，Host 在这里决策。
-  runtime.setTray([
+  const trayItems = () => [
     { id: 'show', label: 'Show dsh Window' },
     { id: 'reload', label: 'Reload Page' },
     { id: 'restart', label: 'Restart' },
+    { id: 'keep-awake', label: '防止休眠', type: 'checkbox', checked: runtime.isKeepAwakeEnabled() },
     { type: 'separator', id: 'sep' },
     { id: 'quit', label: 'Quit dsh Desktop' },
-  ])
+  ]
+  runtime.setTray(trayItems())
 
   const killDshAndQuit = () => state.killGracefully(1500, () => runtime.quit())
   const killDshAndRestart = () => state.killGracefully(1500, () => runtime.restart())
@@ -105,6 +107,10 @@ async function boot() {
         if (event.itemId === 'show') runtime.show()
         else if (event.itemId === 'reload') runtime.reload()
         else if (event.itemId === 'restart') killDshAndRestart()
+        else if (event.itemId === 'keep-awake') {
+          runtime.toggleKeepAwake()
+          runtime.setTray(trayItems()) // 重新渲染勾选状态
+        }
         else if (event.itemId === 'quit') killDshAndQuit()
         break
       case 'quit/requested':
