@@ -50,6 +50,10 @@ export interface DesktopRuntime {
   /** 设置托盘图标的红/黄/绿状态点（壳子按优先级取舍并决定何时清除）。 */
   setBadge(state: DesktopBadgeState): void
 
+  // ---- 电源 ----
+  /** 阻止系统休眠（保持网络；不阻止息屏）。enabled=true 开始，false 停止。 */
+  setKeepAwake(enabled: boolean): void
+
   // ---- 原生对话框 ----
   pickDirectory(options?: DesktopDirectoryPickerOptions): Promise<string | null>
   showMessageBox(options: DesktopMessageBoxOptions): Promise<DesktopMessageBoxResult>

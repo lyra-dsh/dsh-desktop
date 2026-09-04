@@ -16,6 +16,8 @@
     "@omnilyra/desktop-host": "*",
     "@omnilyra/desktop-electron": "*",
     "@omnilyra/desktop-notifications": "*",
+    "@omnilyra/desktop-badge": "*",
+    "@omnilyra/desktop-keep-awake": "*",
     "pnpm": "9.10.0"
   },
   "devDependencies": {

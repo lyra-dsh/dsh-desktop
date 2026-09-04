@@ -34,11 +34,13 @@ test('createTransportRuntime proxies void methods and subscribe', async () => {
   runtime.setTitle('hello')
   runtime.setTray([{ id: 'x' }])
   runtime.setBadge('error')
+  runtime.setKeepAwake(true)
   runtime.subscribe(() => {})
   assert.deepStrictEqual(calls[0], ['show', []])
   assert.deepStrictEqual(calls[1], ['setTitle', ['hello']])
   assert.deepStrictEqual(calls[2], ['setTray', [[{ id: 'x' }]]])
   assert.deepStrictEqual(calls[3], ['setBadge', ['error']])
+  assert.deepStrictEqual(calls[4], ['setKeepAwake', [true]])
   assert.strictEqual(typeof eventListener, 'function')
 })
 

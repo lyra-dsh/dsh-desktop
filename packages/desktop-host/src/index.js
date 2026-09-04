@@ -82,6 +82,9 @@ function createTransportRuntime(transport) {
     // 托盘状态点
     setBadge: (state) => call('setBadge', [state]),
 
+    // 电源
+    setKeepAwake: (enabled) => call('setKeepAwake', [enabled]),
+
     // 对话框
     pickDirectory: (options) => call('pickDirectory', [options]),
     showMessageBox: (options) => call('showMessageBox', [options]),

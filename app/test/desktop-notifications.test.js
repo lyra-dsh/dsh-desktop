@@ -7,16 +7,11 @@ const notifications = require('@omnilyra/desktop-notifications')
 function fakeCtx() {
   const listeners = {}
   const notified = []
-  const badged = []
   return {
     listeners,
     notified,
-    badged,
     on(name, fn) { listeners[name] = fn },
-    desktopRuntime: {
-      notify: (n) => notified.push(n),
-      setBadge: (s) => badged.push(s),
-    },
+    desktopRuntime: { notify: (n) => notified.push(n) },
   }
 }
 
@@ -40,7 +35,6 @@ test('completed turn notifies with turn info when no title yet', () => {
     { type: 'turn/end', data: { turn: 3, reason: { kind: 'completed' } } },
   )
   assert.deepStrictEqual(ctx.notified, [{ title: 'dsh 已完成', body: '第 3 轮已完成' }])
-  assert.deepStrictEqual(ctx.badged, ['unread'])
 })
 
 test('completed turn uses the session title instead of id', () => {
@@ -100,7 +94,6 @@ test('approval/request notifies with Ping sound and delegates', () => {
   assert.strictEqual(delegated, true)
   assert.strictEqual(result, 'allowed-once')
   assert.deepStrictEqual(ctx.notified, [{ title: '需要审批', body: 'bash：run it', sound: 'Ping' }])
-  assert.deepStrictEqual(ctx.badged, ['approval'])
 })
 
 test('user-questions/request notifies with Ping sound and delegates', () => {
@@ -113,7 +106,6 @@ test('user-questions/request notifies with Ping sound and delegates', () => {
   )
   assert.strictEqual(delegated, true)
   assert.deepStrictEqual(ctx.notified, [{ title: '需要回答', body: '要用哪种方案？', sound: 'Ping' }])
-  assert.deepStrictEqual(ctx.badged, ['approval'])
 })
 
 test('error turn notifies with Basso sound', () => {
@@ -124,5 +116,4 @@ test('error turn notifies with Basso sound', () => {
     { type: 'turn/end', data: { turn: 2, reason: { kind: 'error', error: { message: 'boom' } } } },
   )
   assert.deepStrictEqual(ctx.notified, [{ title: 'dsh 出错', body: 'boom', sound: 'Basso' }])
-  assert.deepStrictEqual(ctx.badged, ['error'])
 })

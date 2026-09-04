@@ -1,0 +1,14 @@
+{
+  "name": "@omnilyra/desktop-keep-awake",
+  "version": "0.1.0",
+  "description": "Desktop feature plugin: prevent system sleep while any session is running.",
+  "private": true,
+  "main": "src/index.js",
+  "files": [
+    "src"
+  ],
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.2",
+    "@omnilyra/desktop-protocol": "*"
+  }
+}

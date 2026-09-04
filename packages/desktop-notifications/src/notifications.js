@@ -3,8 +3,8 @@
 /**
  * desktop-notifications：在 dsh 内订阅会话/审批/提问/出错事件，弹系统通知。
  *
- * 只注入 `desktopRuntime`（由 desktop-host 提供）；事件本身走 cordis 的
- * `ctx.on`，不注入对应服务——监听器会在服务 emit 时收到事件。
+ * 只负责「系统通知」这一件事；托盘状态点见 desktop-badge，防休眠见
+ * desktop-keep-awake。只注入 `desktopRuntime`，事件走 cordis 的 `ctx.on`。
  */
 
 function notify(ctx, title, body, sound) {
@@ -14,14 +14,6 @@ function notify(ctx, title, body, sound) {
     ctx.desktopRuntime.notify(notification)
   } catch (cause) {
     console.error('[desktop-notifications] notify failed:', cause)
-  }
-}
-
-function badge(ctx, state) {
-  try {
-    ctx.desktopRuntime.setBadge(state)
-  } catch (cause) {
-    console.error('[desktop-notifications] setBadge failed:', cause)
   }
 }
 
@@ -53,12 +45,10 @@ module.exports = {
       if (kind === 'completed') {
         const title = titleOf(session)
         notify(ctx, 'dsh 已完成', title || `第 ${event.data.turn} 轮已完成`)
-        badge(ctx, 'unread')
       } else if (kind === 'error') {
         const err = event.data.reason.error
         const msg = err && err.message ? err.message : '执行出错'
         notify(ctx, 'dsh 出错', msg, 'Basso')
-        badge(ctx, 'error')
       }
     })
 
@@ -68,7 +58,6 @@ module.exports = {
         ? `${req.toolName}${req.reason ? '：' + req.reason : ''}`
         : (req.reason || '')
       notify(ctx, '需要审批', body, 'Ping')
-      badge(ctx, 'approval')
       return next()
     })
 
@@ -76,7 +65,6 @@ module.exports = {
     ctx.on('user-questions/request', (request, next) => {
       const q = request.questions && request.questions[0]
       notify(ctx, '需要回答', q && q.question ? q.question : '请回答一个问题', 'Ping')
-      badge(ctx, 'approval')
       return next()
     })
   },

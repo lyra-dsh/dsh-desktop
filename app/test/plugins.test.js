@@ -25,11 +25,12 @@ test('profileNodeModules joins profile node_modules under dsh home', () => {
   )
 })
 
-test('patchContent inserts both plugins', () => {
+test('patchContent inserts all desktop plugins', () => {
   const yaml = plugins.patchContent()
   assert.ok(yaml.startsWith('- insert:'))
-  assert.ok(yaml.includes("name: '@omnilyra/desktop-host'"))
-  assert.ok(yaml.includes("name: '@omnilyra/desktop-notifications'"))
+  for (const name of ['desktop-host', 'desktop-notifications', 'desktop-badge', 'desktop-keep-awake']) {
+    assert.ok(yaml.includes(`name: '@omnilyra/${name}'`))
+  }
 })
 
 test('pluginRoot resolves the scoped package dir', () => {

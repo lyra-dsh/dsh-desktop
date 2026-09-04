@@ -10,7 +10,7 @@
  */
 
 const {
-  app, BrowserWindow, Tray, Menu, dialog, shell, nativeImage, Notification, nativeTheme,
+  app, BrowserWindow, Tray, Menu, dialog, shell, nativeImage, Notification, nativeTheme, powerSaveBlocker,
 } = require('electron')
 const fs = require('node:fs')
 
@@ -57,6 +57,7 @@ class ElectronDesktopRuntime {
     this.listeners = new Set()
     this.notifications = new Set()
     this.badgeState = 'none'
+    this.keepAwakeId = null
     this.isQuitting = false
 
     // 用户触发退出（Cmd+Q / 系统退出）→ 上报，由 Host 清理后回 quit()。
@@ -225,6 +226,19 @@ class ElectronDesktopRuntime {
     const p = this._badgeIconPath(this.badgeState)
     if (p && fs.existsSync(p)) {
       this.tray.setImage(nativeImage.createFromPath(p))
+    }
+  }
+
+  // ---- 电源 ----
+  setKeepAwake(enabled) {
+    if (enabled) {
+      if (this.keepAwakeId == null) {
+        // prevent-app-suspension：阻止系统休眠（保持网络），但不阻止息屏。
+        this.keepAwakeId = powerSaveBlocker.start('prevent-app-suspension')
+      }
+    } else if (this.keepAwakeId != null) {
+      powerSaveBlocker.stop(this.keepAwakeId)
+      this.keepAwakeId = null
     }
   }
 

@@ -94,28 +94,30 @@ Resulting argv (defaults shown):
 dsh --profile web --patch <userData>/dsh-desktop.patch.yml --host 127.0.0.1 --port 0 --no-open [extraArgs...]
 ```
 
-## Notifications
+## Desktop integration plugins
 
 When `notify` is true (the default), the app shows an OS notification when the
 agent **finishes a turn** or when it **needs your approval**. It does this by
-loading two of the shell's own cordis plugins into dsh and talking over the
+loading a few of the shell's own cordis plugins into dsh and talking over the
 parent–child IPC channel (dsh is the shell's child process):
 
-1. On startup the shell copies `@omnilyra/desktop-host` + `@omnilyra/desktop-notifications`
-   into dsh's profile `node_modules` and writes `dsh-desktop.patch.yml` — a `--patch`
-   overlay that inserts both plugins. The shell then launches dsh with that patch
-   and an extra `ipc` stdio channel.
+1. On startup the shell copies the `@omnilyra/desktop-*` plugins into dsh's profile
+   `node_modules` and writes `dsh-desktop.patch.yml` — a `--patch` overlay that inserts
+   them. The shell then launches dsh with that patch and an extra `ipc` stdio channel.
 2. Inside dsh:
    - `desktop-host` provides `ctx.desktopRuntime` as a proxy whose method calls are
      serialized over `process.send` (the IPC channel).
-   - `desktop-notifications` subscribes to dsh's `session/event` (`turn/end` with
-     `completed`) and `approval/request` events, calling `ctx.desktopRuntime.notify(...)`.
-3. The shell's main process receives the `invoke` message and runs
-   `ElectronDesktopRuntime.notify(...)` — a real, shell-owned notification (app
-   identity, click-to-focus, cross-platform).
+   - `desktop-notifications` subscribes to session/approval events and calls
+     `ctx.desktopRuntime.notify(...)`.
+   - `desktop-badge` sets the tray status dot (`ctx.desktopRuntime.setBadge(...)`).
+   - `desktop-keep-awake` keeps the machine awake while turns run
+     (`ctx.desktopRuntime.setKeepAwake(...)`).
+3. The shell's main process receives the `invoke` message and runs the matching
+   `ElectronDesktopRuntime` method — shell-owned notifications, tray dots, and power
+   management.
 
 The plugins live outside dsh's profile bundles, so dsh stays a black-box wrapper —
-system or private. Set `notify: false` to disable.
+system or private. Set `notify: false` to disable the notifications.
 
 ### Tray status dot
 
@@ -131,6 +133,13 @@ as a persistent reminder (system notifications are easy to miss):
 Priority is red > yellow > green (only one dot shows). The dot clears as soon as
 you focus the window. The icons live in `app/build/tray-{red,yellow,green}.png`
 (+`@2x`).
+
+### Keep awake while running
+
+While any session (including subagents) is running, the app prevents the system
+from sleeping — so the network stays up during long agent runs. The screen may
+still turn off. This uses Electron's `powerSaveBlocker` (`prevent-app-suspension`):
+it starts on the first `turn/start` and stops after the last `turn/end`.
 
 ## Development notes
 
@@ -163,7 +172,9 @@ packages/
   desktop-protocol/      zero-dependency interfaces (DesktopRuntime, DesktopEvent, DesktopTransport)
   desktop-host/          cordis plugin: provides ctx.desktopRuntime over the child-process IPC channel
   desktop-electron/      Electron implementation of DesktopRuntime
-  desktop-notifications/ cordis plugin: session-complete + approval → ctx.desktopRuntime.notify
+  desktop-notifications/ cordis plugin: session/approval events → ctx.desktopRuntime.notify
+  desktop-badge/         cordis plugin: session state → ctx.desktopRuntime.setBadge (tray dot)
+  desktop-keep-awake/    cordis plugin: running turns → ctx.desktopRuntime.setKeepAwake
 app/                     composition root: resolve dsh → spawn (with ipc) → window/tray + IPC dispatch
 ```
 
