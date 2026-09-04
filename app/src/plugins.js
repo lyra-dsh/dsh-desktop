@@ -12,7 +12,7 @@ const os = require('node:os')
 const path = require('node:path')
 const { app } = require('electron')
 
-const PLUGINS = ['desktop-host', 'desktop-notifications', 'desktop-badge', 'desktop-keep-awake']
+const PLUGINS = ['desktop-host', 'desktop-notifications', 'desktop-badge', 'desktop-keep-awake', 'desktop-opener']
 
 /** Map app.asar → app.asar.unpacked（与 dsh.js 同款）。 */
 function unpackedAsarPath(p) {
@@ -45,13 +45,18 @@ function copyDir(src, dst) {
   }
 }
 
-/** 把一个插件包（package.json + src）复制进 profile node_modules/@omnilyra/<name>。 */
+/** 把一个插件包复制进 profile node_modules/@omnilyra/<name>（跳过 node_modules）。 */
 function installPlugin(name, omnilyraDir) {
   const root = pluginRoot(name)
   const dst = path.join(omnilyraDir, name)
   fs.mkdirSync(dst, { recursive: true })
-  fs.copyFileSync(path.join(root, 'package.json'), path.join(dst, 'package.json'))
-  copyDir(path.join(root, 'src'), path.join(dst, 'src'))
+  for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
+    if (entry.name === 'node_modules') continue
+    const s = path.join(root, entry.name)
+    const d = path.join(dst, entry.name)
+    if (entry.isDirectory()) copyDir(s, d)
+    else fs.copyFileSync(s, d)
+  }
 }
 
 function patchContent() {
@@ -65,6 +70,8 @@ function patchContent() {
     "      name: '@omnilyra/desktop-badge'",
     '    - id: desktop-keep-awake',
     "      name: '@omnilyra/desktop-keep-awake'",
+    '    - id: desktop-opener',
+    "      name: '@omnilyra/desktop-opener'",
     '',
   ].join('\n')
 }
