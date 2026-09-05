@@ -47,6 +47,10 @@
       "output": "release",
       "buildResources": "build"
     },
+    "publish": {
+      "provider": "generic",
+      "url": "https://updates.example.com/dsh-desktop"
+    },
     "mac": {
       "target": [
         "dmg",

@@ -20,7 +20,7 @@ const dsh = require('./dsh')
 const plugins = require('./plugins')
 const { DshState } = require('./state')
 const { ElectronDesktopRuntime } = require('@omnilyra/desktop-electron')
-const { createUpdater, createFeedTarget } = require('@omnilyra/desktop-updater')
+const { createUpdater, createFeedTarget, createElectronUpdaterTarget } = require('@omnilyra/desktop-updater')
 
 const TRAY_ICON_PATH = dsh.unpackedAsarPath(path.join(__dirname, '..', 'build', 'tray.png'))
 
@@ -35,23 +35,35 @@ function showError(detail) {
   app.exit(1)
 }
 
-/** 按配置构建升级器；未启用 / 无 feedUrl 时返回 null。 */
+/** 按配置构建升级器：macOS 走 manual（feed），Windows/Linux 走 auto（electron-updater）。 */
 function buildUpdater(cfg) {
   const u = cfg.updater
-  if (!u || !u.enabled || !u.feedUrl) return null
-  return createUpdater({
-    targets: [
-      createFeedTarget({
+  if (!u || !u.enabled) return null
+  const currentVersion = () => app.getVersion()
+  const targets = []
+  if (process.platform === 'darwin') {
+    // macOS 无 Developer ID → manual：版本清单 + 下载安装包 + 打开。
+    if (u.feedUrl) {
+      targets.push(createFeedTarget({
         id: 'shell',
         label: 'dsh Desktop',
         feedUrl: u.feedUrl,
-        currentVersion: () => app.getVersion(),
+        currentVersion,
         downloadsDir: () => app.getPath('downloads'),
         openFile: (p) => shell.openPath(p),
-      }),
-    ],
-    autoDownload: u.autoDownload !== false,
-  })
+      }))
+    }
+  } else {
+    // Windows / Linux → auto：NSIS / AppImage 无需签名也能 quitAndInstall。
+    targets.push(createElectronUpdaterTarget({
+      id: 'shell',
+      label: 'dsh Desktop',
+      currentVersion,
+      isPackaged: () => app.isPackaged,
+    }))
+  }
+  if (targets.length === 0) return null
+  return createUpdater({ targets, autoDownload: u.autoDownload !== false })
 }
 
 async function boot() {

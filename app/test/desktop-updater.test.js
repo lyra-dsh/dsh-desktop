@@ -5,7 +5,7 @@ const assert = require('node:assert')
 const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
-const { createUpdater, createFeedTarget, compareVersions } = require('@omnilyra/desktop-updater')
+const { createUpdater, createFeedTarget, compareVersions, createElectronUpdaterTarget } = require('@omnilyra/desktop-updater')
 const config = require('../src/config')
 
 function mockTarget(overrides = {}) {
@@ -158,6 +158,16 @@ test('feed target: download writes file and install opens it', async () => {
   assert.strictEqual(opened, path.join(dir, 'App-0.3.0.dmg'))
   assert.deepStrictEqual([...fs.readFileSync(opened)], [1, 2, 3, 4])
   fs.rmSync(dir, { recursive: true, force: true })
+})
+
+test('electron target: dev mode without config skips check (no electron-updater load)', async () => {
+  const target = createElectronUpdaterTarget({
+    id: 'shell',
+    label: 'Shell',
+    currentVersion: () => '0.2.0',
+    isPackaged: () => false,
+  })
+  assert.strictEqual(await target.check(), null)
 })
 
 test('config: updater defaults', () => {
