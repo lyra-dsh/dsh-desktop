@@ -12,3 +12,5 @@ config.json
 # os
 .DS_Store
 .diag
+# e2e temp dsh homes
+.e2e-*
