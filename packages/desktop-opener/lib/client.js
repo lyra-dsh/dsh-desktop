@@ -23,7 +23,7 @@ window.__ModuleLoader__.load({
 
 		/**
 		 * 会话头部「用外部编辑器打开」控件（split-button）：
-		 *   - 左半（图标 + 名字）＝用当前选中编辑器一键打开工作区
+		 *   - 左半（图标）＝用当前选中编辑器一键打开工作区
 		 *   - 右半（▾）＝展开下拉换编辑器（换完即记住偏好）
 		 * props.sessionId 由会话头部槽位注入。
 		 */
@@ -66,14 +66,13 @@ window.__ModuleLoader__.load({
 				}).catch(() => {});
 			};
 
-			// 与「Session 日志」胶囊按钮保持一致的视觉。
+			// 注意：容器不能 overflow:hidden，否则会裁掉绝对定位的下拉框。
 			const splitStyle = {
 				position: "relative",
 				display: "inline-flex",
 				alignItems: "center",
 				border: "0.5px solid var(--dsw-alias-border-l4)",
 				borderRadius: "18px",
-				overflow: "hidden",
 				height: "32px",
 				fontFamily: "var(--dsw-font-family)",
 				color: "var(--dsw-alias-label-primary)",
@@ -91,12 +90,14 @@ window.__ModuleLoader__.load({
 				fontSize: "13px",
 				fontWeight: "400",
 				lineHeight: "20px",
+				borderRadius: "18px 0 0 18px",
 			};
 			const caretStyle = {
 				...btnStyle,
-				padding: "0 7px",
+				padding: "0 8px",
 				gap: "0px",
 				borderLeft: "0.5px solid var(--dsw-alias-border-l4)",
+				borderRadius: "0 18px 18px 0",
 			};
 			const iconStyle = { width: "16px", height: "16px", borderRadius: "3px", display: "block", flex: "none" };
 			const menuStyle = {
@@ -137,15 +138,16 @@ window.__ModuleLoader__.load({
 						title: current ? "用 " + current.label + " 打开工作区" : "用外部编辑器打开工作区",
 						onClick: () => { if (current) openWith(current.id); },
 					},
-						current && createElement("img", {
-							src: iconUrl(current.id),
-							alt: "",
-							width: 16,
-							height: 16,
-							style: iconStyle,
-							onError: (e) => { e.target.style.display = "none"; },
-						}),
-						createElement("span", null, current ? current.label : "打开项目")
+						current
+							? createElement("img", {
+								src: iconUrl(current.id),
+								alt: "",
+								width: 16,
+								height: 16,
+								style: iconStyle,
+								onError: (e) => { e.target.style.display = "none"; },
+							})
+							: createElement("span", { style: { fontSize: "13px", lineHeight: "20px" } }, "打开项目")
 					),
 					createElement("button", {
 						type: "button",
