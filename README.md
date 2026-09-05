@@ -170,6 +170,8 @@ actually keeping the machine awake.
 The shell is layered so it can wrap *any* dsh (or a custom dsh you build on it)
 without depending on dsh itself. See [`DESIGN.md`](DESIGN.md) for the full
 design, the `DesktopRuntime` protocol, multi-window, and the plugin roadmap.
+For how **other projects** reuse the shell, notifications, and updater
+components, see [`INTEGRATION.md`](INTEGRATION.md).
 
 ```
 packages/
