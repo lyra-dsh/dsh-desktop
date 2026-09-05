@@ -42,21 +42,30 @@ test('resolveEntry: env override wins over null dshBin', async () => {
 })
 
 test('buildPath dedupes and keeps a stable order', () => {
-  const p = dsh.buildPath({ PATH: '/opt/homebrew/bin:/usr/bin' })
+  const p = dsh.buildPath({ HOME: '/Users/u', PATH: '/opt/homebrew/bin:/usr/bin' })
   const parts = p.split(':')
   assert.strictEqual(new Set(parts).size, parts.length)
   assert.ok(parts.includes('/opt/homebrew/bin'))
   assert.ok(parts.includes('/usr/bin'))
   assert.ok(parts.includes('/bin'))
-  assert.ok(parts.indexOf('/opt/homebrew/bin') < parts.indexOf('/usr/bin'))
+  // 现在也带上 commonDshDirs 里的用户工具目录
+  assert.ok(parts.includes('/Users/u/.local/bin'))
+  assert.ok(parts.indexOf('/Users/u/.local/bin') < parts.indexOf('/usr/bin'))
 })
 
-test('buildEnv carries ELECTRON_RUN_AS_NODE and passthrough vars', () => {
-  const env = dsh.buildEnv({ ELECTRON_RUN_AS_NODE: '1' }, { HOME: '/home/u', DSH_HOME: '/home/u/.dsh' })
+test('buildEnv passes through the full environment and overrides PATH', () => {
+  const env = dsh.buildEnv({ ELECTRON_RUN_AS_NODE: '1' }, {
+    HOME: '/home/u',
+    SSH_AUTH_SOCK: '/tmp/ssh-agent.sock',
+    PATH: '/minimal',
+  })
   assert.strictEqual(env.ELECTRON_RUN_AS_NODE, '1')
   assert.strictEqual(env.HOME, '/home/u')
-  assert.strictEqual(env.DSH_HOME, '/home/u/.dsh')
-  assert.ok(typeof env.PATH === 'string' && env.PATH.length > 0)
+  // 非白名单变量（如 SSH_AUTH_SOCK）也全量透传
+  assert.strictEqual(env.SSH_AUTH_SOCK, '/tmp/ssh-agent.sock')
+  // PATH 被重建，不再是最小值
+  assert.notStrictEqual(env.PATH, '/minimal')
+  assert.ok(env.PATH.includes('/opt/homebrew/bin'))
 })
 
 test('buildArgs puts launcher flags (--patch) before app flags (--host)', () => {

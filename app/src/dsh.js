@@ -169,19 +169,35 @@ function unpackedAsarPath(p) {
   return p.replace(/([\\/])app\.asar([\\/])/u, '$1app.asar.unpacked$2')
 }
 
-/** Build a deduped PATH: homebrew/system dirs followed by the existing PATH. */
+/**
+ * 传给 dsh 子进程时被剔除的环境变量黑名单（key 精确匹配）。
+ * 目前为空——全量透传；后续若发现某个变量会干扰 dsh / Electron，再往这里加
+ * （例如 ELECTRON_RUN_AS_NODE 之类的 Electron 专属变量）。
+ */
+const ENV_DENYLIST = new Set([])
+
+/**
+ * 重建子进程 PATH：常见工具目录（nvm node / bun / ~/.local / homebrew）+
+ * 系统目录 + 继承的 PATH。GUI 启动时 PATH 精简，这里补全，否则 dsh 及其沙箱
+ * 找不到 node / bun / npm 全局工具等命令。
+ */
 function buildPath(env = process.env) {
-  const parts = ['/opt/homebrew/bin', '/usr/local/bin', '/usr/bin', '/bin', '/usr/sbin', '/sbin']
+  const parts = []
+  parts.push(...commonDshDirs(env))
+  parts.push('/usr/bin', '/bin', '/usr/sbin', '/sbin')
   if (env.PATH) parts.push(...env.PATH.split(':').filter(Boolean))
   return [...new Set(parts)].join(':')
 }
 
-/** Environment passed to the dsh child. */
+/** 传给 dsh 子进程的环境：全量透传（去黑名单），PATH 用重建后的完整值覆盖 GUI 的精简 PATH。 */
 function buildEnv(extra = {}, env = process.env) {
-  const out = { PATH: buildPath(env) }
-  for (const key of ['HOME', 'DSH_HOME', 'DSH_TELEMETRY_DISABLED', 'SHELL', 'TERM', 'LANG', 'LC_ALL', 'USER']) {
-    if (env[key] !== undefined) out[key] = env[key]
+  const out = {}
+  for (const [key, value] of Object.entries(env)) {
+    if (value === undefined) continue
+    if (ENV_DENYLIST.has(key)) continue
+    out[key] = value
   }
+  out.PATH = buildPath(env)
   return Object.assign(out, extra)
 }
 
