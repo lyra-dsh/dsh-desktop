@@ -17,14 +17,21 @@ window.__ModuleLoader__.load({
 			document.head.appendChild(tag);
 		}
 
+		function iconUrl(editorId) {
+			return "/api/desktop.editor-icon?editorId=" + encodeURIComponent(editorId);
+		}
+
 		/**
-		 * 会话头部「打开项目」按钮：点击展开已安装编辑器列表，选中后调 host 路由打开工作区。
-		 * props.sessionId 由会话头部槽位注入；props.openWith 由下方 inject() 注入。
+		 * 会话头部「用外部编辑器打开」控件（split-button）：
+		 *   - 左半（图标 + 名字）＝用当前选中编辑器一键打开工作区
+		 *   - 右半（▾）＝展开下拉换编辑器（换完即记住偏好）
+		 * props.sessionId 由会话头部槽位注入。
 		 */
 		function OpenWithHeaderAction(props) {
-			const { sessionId, openWith } = props;
+			const { sessionId } = props;
 			const [open, setOpen] = useState(false);
 			const [editors, setEditors] = useState([]);
+			const [preferredId, setPreferredId] = useState(null);
 
 			useEffect(() => {
 				let cancelled = false;
@@ -32,27 +39,66 @@ window.__ModuleLoader__.load({
 					.then((r) => r.json())
 					.then((d) => { if (!cancelled && d && Array.isArray(d.editors)) setEditors(d.editors); })
 					.catch(() => {});
+				fetch("/api/desktop.editor-preference")
+					.then((r) => r.json())
+					.then((d) => { if (!cancelled && d && typeof d.editorId === "string") setPreferredId(d.editorId); })
+					.catch(() => {});
 				return () => { cancelled = true; };
 			}, []);
 
-			// 与「Session 日志」胶囊按钮保持一致的视觉，便于并排放在会话头部。
-			const btnStyle = {
-				border: "0.5px solid var(--dsw-alias-border-l4)",
-				height: "32px",
-				color: "var(--dsw-alias-label-primary)",
-				fontFamily: "var(--dsw-font-family)",
-				cursor: "pointer",
-				background: "0 0",
-				borderRadius: "18px",
-				justifyContent: "center",
+			const current = editors.find((e) => e.id === preferredId) || editors[0] || null;
+
+			const openWith = (editorId) => {
+				fetch("/api/desktop.open-with", {
+					method: "POST",
+					headers: { "content-type": "application/json" },
+					body: JSON.stringify({ editorId, sessionId }),
+				}).catch(() => {});
+			};
+
+			const selectEditor = (editorId) => {
+				setPreferredId(editorId);
+				setOpen(false);
+				fetch("/api/desktop.editor-preference", {
+					method: "PUT",
+					headers: { "content-type": "application/json" },
+					body: JSON.stringify({ editorId }),
+				}).catch(() => {});
+			};
+
+			// 与「Session 日志」胶囊按钮保持一致的视觉。
+			const splitStyle = {
+				position: "relative",
+				display: "inline-flex",
 				alignItems: "center",
-				gap: "4px",
-				padding: "6px 12px",
+				border: "0.5px solid var(--dsw-alias-border-l4)",
+				borderRadius: "18px",
+				overflow: "hidden",
+				height: "32px",
+				fontFamily: "var(--dsw-font-family)",
+				color: "var(--dsw-alias-label-primary)",
+			};
+			const btnStyle = {
+				background: "transparent",
+				border: "none",
+				cursor: "pointer",
+				color: "inherit",
+				display: "inline-flex",
+				alignItems: "center",
+				gap: "6px",
+				padding: "0 10px",
+				height: "100%",
 				fontSize: "13px",
 				fontWeight: "400",
 				lineHeight: "20px",
-				display: "inline-flex",
 			};
+			const caretStyle = {
+				...btnStyle,
+				padding: "0 7px",
+				gap: "0px",
+				borderLeft: "0.5px solid var(--dsw-alias-border-l4)",
+			};
+			const iconStyle = { width: "16px", height: "16px", borderRadius: "3px", display: "block", flex: "none" };
 			const menuStyle = {
 				position: "absolute",
 				top: "calc(100% + 6px)",
@@ -63,10 +109,12 @@ window.__ModuleLoader__.load({
 				borderRadius: "8px",
 				boxShadow: "0 4px 16px rgba(0,0,0,.18)",
 				padding: "4px",
-				minWidth: "168px",
+				minWidth: "176px",
 			};
 			const itemStyle = {
-				display: "block",
+				display: "flex",
+				alignItems: "center",
+				gap: "8px",
 				width: "100%",
 				border: "none",
 				background: "transparent",
@@ -78,16 +126,36 @@ window.__ModuleLoader__.load({
 				color: "var(--dsw-alias-label-primary)",
 				borderRadius: "6px",
 			};
+			const checkStyle = { marginLeft: "auto", color: "var(--dsw-alias-label-dimmed)", fontSize: "12px" };
 
 			return createElement(Fragment, null,
-				createElement("span", { style: { position: "relative", display: "inline-flex" } },
+				createElement("span", { style: splitStyle },
 					createElement("button", {
 						type: "button",
 						className: "dop-btn",
 						style: btnStyle,
-						title: "用外部编辑器打开当前工作区",
+						title: current ? "用 " + current.label + " 打开工作区" : "用外部编辑器打开工作区",
+						onClick: () => { if (current) openWith(current.id); },
+					},
+						current && createElement("img", {
+							src: iconUrl(current.id),
+							alt: "",
+							width: 16,
+							height: 16,
+							style: iconStyle,
+							onError: (e) => { e.target.style.display = "none"; },
+						}),
+						createElement("span", null, current ? current.label : "打开项目")
+					),
+					createElement("button", {
+						type: "button",
+						className: "dop-btn",
+						style: caretStyle,
+						title: "选择编辑器",
+						"aria-haspopup": "true",
+						"aria-expanded": open,
 						onClick: () => setOpen((v) => !v),
-					}, "打开项目"),
+					}, createElement("span", { style: { fontSize: "10px", lineHeight: "1" } }, "▾")),
 					open && createElement("div", { style: menuStyle },
 						editors.length === 0
 							? createElement("div", { style: { padding: "6px 8px", color: "var(--dsw-alias-label-dimmed)", fontSize: "12px" } }, "未检测到编辑器")
@@ -96,8 +164,19 @@ window.__ModuleLoader__.load({
 								type: "button",
 								className: "dop-item",
 								style: itemStyle,
-								onClick: () => { setOpen(false); openWith(e.id, sessionId); },
-							}, e.label))
+								onClick: () => selectEditor(e.id),
+							},
+								createElement("img", {
+									src: iconUrl(e.id),
+									alt: "",
+									width: 16,
+									height: 16,
+									style: iconStyle,
+									onError: (e) => { e.target.style.display = "none"; },
+								}),
+								createElement("span", null, e.label),
+								e.id === (current && current.id) ? createElement("span", { style: checkStyle }, "✓") : null
+							))
 					)
 				)
 			);
@@ -109,15 +188,7 @@ window.__ModuleLoader__.load({
 			ctx.slots.inject("conversation.session.header.utilities", () => ctx.slots.register({
 				name: "conversation.session.header.utilities",
 				id: "desktop-opener",
-				inject: () => ({
-					openWith: (editorId, sessionId) => {
-						fetch("/api/desktop.open-with", {
-							method: "POST",
-							headers: { "content-type": "application/json" },
-							body: JSON.stringify({ editorId, sessionId }),
-						}).catch(() => {});
-					},
-				}),
+				inject: () => ({}),
 			}, OpenWithHeaderAction));
 		}
 
