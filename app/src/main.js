@@ -20,7 +20,7 @@ const dsh = require('./dsh')
 const plugins = require('./plugins')
 const { DshState } = require('./state')
 const { ElectronDesktopRuntime } = require('@omnilyra/desktop-electron')
-const { createUpdater, createFeedTarget, createElectronUpdaterTarget } = require('@omnilyra/desktop-updater')
+const { createUpdater, createFeedTarget, createElectronUpdaterTarget, createNpmPackageTarget } = require('@omnilyra/desktop-updater')
 
 const TRAY_ICON_PATH = dsh.unpackedAsarPath(path.join(__dirname, '..', 'build', 'tray.png'))
 
@@ -35,8 +35,38 @@ function showError(detail) {
   app.exit(1)
 }
 
-/** 按配置构建升级器：macOS 走 manual（feed），Windows/Linux 走 auto（electron-updater）。 */
-function buildUpdater(cfg) {
+/** 决定 dsh 运行时升级策略：显式配置优先，否则按供给方式推断。 */
+function resolveDshMode(cfg, entry) {
+  const rt = cfg.updater && cfg.updater.runtime
+  if (rt && rt.mode) return rt.mode
+  if (cfg.dshBin) return 'none' // 显式 dshBin → 产品自管
+  if (entry.kind === 'bundled') return 'auto' // 兜底安装 → 自动 npm 升级
+  return 'notify' // 系统 dsh → 只提示
+}
+
+/** 构建 dsh 运行时升级 target；mode 为 'none' 时返回 null。 */
+function buildDshTarget(cfg, entry, dshVer, dshMode, state, runtime) {
+  if (dshMode === 'none') return null
+  const rt = cfg.updater && cfg.updater.runtime
+  const packageName = (rt && rt.package) || '@deepseek-ai/dsh'
+  const apply = dshMode === 'auto'
+    ? async (version) => {
+        // 重装到新版本，然后优雅杀掉 dsh、重启整个 app（重启时用新 dsh）。
+        await dsh.upgradeProvisionedDsh(version)
+        state.killGracefully(1500, () => runtime.restart())
+      }
+    : null // notify：install 不动作，只靠弹窗提示
+  return createNpmPackageTarget({
+    id: 'dsh',
+    label: 'dsh runtime',
+    packageName,
+    currentVersion: () => dshVer || '0.0.0',
+    apply,
+  })
+}
+
+/** 按配置 + 供给方式构建升级器：shell target + dsh runtime target。 */
+function buildUpdater(cfg, entry, dshVer, dshMode, state, runtime) {
   const u = cfg.updater
   if (!u || !u.enabled) return null
   const currentVersion = () => app.getVersion()
@@ -62,14 +92,17 @@ function buildUpdater(cfg) {
       isPackaged: () => app.isPackaged,
     }))
   }
+  const dshTarget = buildDshTarget(cfg, entry, dshVer, dshMode, state, runtime)
+  if (dshTarget) targets.push(dshTarget)
   if (targets.length === 0) return null
   return createUpdater({ targets, autoDownload: u.autoDownload !== false })
 }
 
 async function boot() {
   const cfg = config.loadForApp()
-  const updater = buildUpdater(cfg)
   const entry = await dsh.resolveEntry(cfg)
+  const dshVer = await dsh.dshVersion(entry)
+  const dshMode = resolveDshMode(cfg, entry)
   const notifyArgs = cfg.notify ? plugins.ensureDesktopPlugins(cfg.profile) : []
   const child = dsh.spawnDsh(cfg, entry, process.env, notifyArgs)
   const state = new DshState(child.pid)
@@ -93,9 +126,10 @@ async function boot() {
     minHeight: 600,
     theme: 'system',
     locale: 'en',
-    updater,
   })
   runtime.createMainWindow()
+  const updater = buildUpdater(cfg, entry, dshVer, dshMode, state, runtime)
+  if (updater) runtime.setUpdater(updater)
 
   // dsh 侧插件（desktop-host）通过 IPC 调壳子能力：invoke → runtime[method](...args)。
   child.on('message', async (msg) => {
@@ -131,19 +165,46 @@ async function boot() {
 
   /** 升级状态 → 弹窗 / 日志。安装前弹窗确认（策略）。 */
   const handleUpdateStatus = async (status) => {
-    if (status.state === 'downloaded') {
-      const res = await dialog.showMessageBox({
-        type: 'info',
-        title: '更新已下载',
-        message: `新版本 ${status.version || ''} 已下载，是否打开安装包？`,
-        buttons: ['打开安装包', '稍后'],
-        defaultId: 0,
-        cancelId: 1,
-      })
-      if (res.response === 0 && updater) updater.install()
-    } else if (status.state === 'error') {
+    if (status.state === 'error') {
       console.error('[dsh-desktop] update error:', status.error)
+      return
     }
+    if (status.state !== 'downloaded') return
+
+    // dsh 运行时升级：auto = 更新并重启；notify = 只提示手动升级。
+    if (status.target === 'dsh') {
+      if (dshMode === 'auto') {
+        const res = await dialog.showMessageBox({
+          type: 'info',
+          title: 'dsh 有新版本',
+          message: `检测到 dsh 新版本 ${status.version || ''}（当前 ${status.currentVersion || ''}），是否更新并重启？`,
+          buttons: ['更新并重启', '稍后'],
+          defaultId: 0,
+          cancelId: 1,
+        })
+        if (res.response === 0 && updater) updater.install()
+      } else {
+        await dialog.showMessageBox({
+          type: 'info',
+          title: 'dsh 有新版本',
+          message: `检测到 dsh 新版本 ${status.version || ''}（当前 ${status.currentVersion || ''}），请手动升级。`,
+          buttons: ['知道了'],
+          defaultId: 0,
+        })
+      }
+      return
+    }
+
+    // 壳子升级：manual 打开安装包；auto（win/linux）quitAndInstall。
+    const res = await dialog.showMessageBox({
+      type: 'info',
+      title: '更新已下载',
+      message: `新版本 ${status.version || ''} 已下载，是否安装？`,
+      buttons: ['安装', '稍后'],
+      defaultId: 0,
+      cancelId: 1,
+    })
+    if (res.response === 0 && updater) updater.install()
   }
 
   runtime.subscribe((event) => {

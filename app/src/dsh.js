@@ -90,11 +90,11 @@ function resolvePnpmCli() {
   return unpackedAsarPath(path.join(path.dirname(pkgPath), rel))
 }
 
-/** 用 Electron 的 Node 跑 pnpm，把 dsh 装到私有目录。 */
-function runPnpmInstall(dir) {
+/** 用 Electron 的 Node 跑 pnpm，把 dsh（指定版本）装到私有目录。 */
+function runPnpmInstall(dir, version = DSH_VERSION) {
   return new Promise((resolve, reject) => {
     const pnpm = resolvePnpmCli()
-    const child = spawn(process.execPath, [pnpm, 'add', `${DSH_PACKAGE}@${DSH_VERSION}`, '--dir', dir], {
+    const child = spawn(process.execPath, [pnpm, 'add', `${DSH_PACKAGE}@${version}`, '--dir', dir], {
       stdio: ['ignore', 'pipe', 'pipe'],
       env: { ...process.env, [RUN_AS_NODE]: '1' },
     })
@@ -104,7 +104,7 @@ function runPnpmInstall(dir) {
     child.on('error', reject)
     child.on('close', (code) => {
       if (code === 0) {
-        try { fs.writeFileSync(provisionMarker(), DSH_VERSION) } catch { /* 非致命：下次仍会重装 */ }
+        try { fs.writeFileSync(provisionMarker(), version) } catch { /* 非致命：下次仍会重装 */ }
         resolve()
       } else {
         reject(new Error(`dsh 安装失败 (code ${code}): ${output.slice(-1500)}`))
@@ -120,6 +120,34 @@ async function provisionDsh() {
   fs.mkdirSync(dir, { recursive: true })
   await runPnpmInstall(dir)
   return provisionBinJs()
+}
+
+/** 升级兜底 dsh 到指定版本（已装也重装）；返回新 bin.js。 */
+async function upgradeProvisionedDsh(version) {
+  const dir = provisionDir()
+  fs.mkdirSync(dir, { recursive: true })
+  await runPnpmInstall(dir, version)
+  return provisionBinJs()
+}
+
+/** 运行 resolved entry 的 `--version`，返回版本字符串或 null。 */
+function dshVersion(entry) {
+  return new Promise((resolve) => {
+    const cmd = entry.kind === 'bundled' ? process.execPath : entry.entry
+    const args = entry.kind === 'bundled' ? ['--expose-internals', entry.entry, '--version'] : ['--version']
+    const env = entry.kind === 'bundled' ? { ...process.env, [RUN_AS_NODE]: '1' } : process.env
+    let child
+    try { child = spawn(cmd, args, { stdio: ['ignore', 'pipe', 'pipe'], env }) } catch { resolve(null); return }
+    let out = ''
+    let err = ''
+    child.stdout.on('data', (d) => { out += d })
+    child.stderr.on('data', (d) => { err += d })
+    child.on('error', () => resolve(null))
+    child.on('close', () => {
+      const v = (out.trim() || err.trim())
+      resolve(v || null)
+    })
+  })
 }
 
 // ---- 入口解析：显式 > 系统 > 私有兜底 ----
@@ -308,6 +336,8 @@ module.exports = {
   provisionBinJs,
   resolvePnpmCli,
   provisionDsh,
+  upgradeProvisionedDsh,
+  dshVersion,
   resolveEntry,
   buildPath,
   buildEnv,

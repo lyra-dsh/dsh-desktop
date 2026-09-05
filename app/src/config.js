@@ -27,6 +27,13 @@ const DEFAULT_CONFIG = Object.freeze({
     autoDownload: true,
     // 版本清单 URL（manual 模式）：JSON { version, url }。空则禁用自动升级。
     feedUrl: null,
+    // 运行时（dsh）升级策略。
+    runtime: Object.freeze({
+      // 'auto' | 'notify' | 'none' | null（null = 按供给方式推断）。
+      mode: null,
+      // 查新用的 npm 包名（auto/notify 模式）。
+      package: '@deepseek-ai/dsh',
+    }),
   }),
 })
 
@@ -93,6 +100,9 @@ function loadFrom(filePath) {
   // updater 是嵌套对象：按子键合并，缺失子键回退默认。
   if (parsed.updater && typeof parsed.updater === 'object') {
     cfg.updater = { ...DEFAULT_CONFIG.updater, ...parsed.updater }
+    if (parsed.updater.runtime && typeof parsed.updater.runtime === 'object') {
+      cfg.updater.runtime = { ...DEFAULT_CONFIG.updater.runtime, ...parsed.updater.runtime }
+    }
   }
   return cfg
 }

@@ -61,11 +61,9 @@ class ElectronDesktopRuntime {
     this.keepAwakeEnabled = true
     this.keepAwakeActive = false
     this.isQuitting = false
-    this.updater = config.updater || null
-    // 升级状态（来自注入的 updater）→ 转成 Shell → Host 事件推出去。
-    if (this.updater && typeof this.updater.subscribe === 'function') {
-      this.updater.subscribe((status) => this.emit({ type: 'update/state', status }))
-    }
+    this.updater = null
+    this._updaterUnsubscribe = null
+    if (config.updater) this.setUpdater(config.updater)
 
     // 用户触发退出（Cmd+Q / 系统退出）→ 上报，由 Host 清理后回 quit()。
     app.on('before-quit', (event) => {
@@ -314,6 +312,14 @@ class ElectronDesktopRuntime {
   setLocale(locale) { this._locale = locale }
 
   // ---- 升级 ----
+  /** 注入（或替换）升级器，并把它的状态转成 Shell → Host 事件。 */
+  setUpdater(updater) {
+    if (this._updaterUnsubscribe) { this._updaterUnsubscribe(); this._updaterUnsubscribe = null }
+    this.updater = updater || null
+    if (this.updater && typeof this.updater.subscribe === 'function') {
+      this._updaterUnsubscribe = this.updater.subscribe((status) => this.emit({ type: 'update/state', status }))
+    }
+  }
   async checkForUpdates() { return this.updater ? this.updater.check() : null }
   async downloadUpdate() { return this.updater ? this.updater.download() : null }
   quitAndInstall() { if (this.updater) this.updater.install() }

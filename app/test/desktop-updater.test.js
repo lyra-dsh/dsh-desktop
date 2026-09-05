@@ -5,7 +5,7 @@ const assert = require('node:assert')
 const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
-const { createUpdater, createFeedTarget, compareVersions, createElectronUpdaterTarget } = require('@omnilyra/desktop-updater')
+const { createUpdater, createFeedTarget, compareVersions, createElectronUpdaterTarget, createNpmPackageTarget } = require('@omnilyra/desktop-updater')
 const config = require('../src/config')
 
 function mockTarget(overrides = {}) {
@@ -170,15 +170,70 @@ test('electron target: dev mode without config skips check (no electron-updater 
   assert.strictEqual(await target.check(), null)
 })
 
+test('npm target: check returns version when newer', async () => {
+  const target = createNpmPackageTarget({
+    id: 'dsh',
+    label: 'dsh',
+    packageName: '@deepseek-ai/dsh',
+    currentVersion: () => '0.1.0',
+    apply: async () => {},
+    fetchFn: async (url) => {
+      assert.ok(url.includes('@deepseek-ai%2Fdsh'))
+      return { ok: true, status: 200, json: async () => ({ version: '0.2.0' }) }
+    },
+  })
+  assert.deepStrictEqual(await target.check(), { version: '0.2.0', currentVersion: '0.1.0' })
+})
+
+test('npm target: check returns null when not newer', async () => {
+  const target = createNpmPackageTarget({
+    id: 'dsh',
+    label: 'dsh',
+    packageName: '@deepseek-ai/dsh',
+    currentVersion: () => '0.2.0',
+    apply: async () => {},
+    fetchFn: async () => ({ ok: true, status: 200, json: async () => ({ version: '0.1.0' }) }),
+  })
+  assert.strictEqual(await target.check(), null)
+})
+
+test('npm target: install calls apply with the available version', async () => {
+  let applied = null
+  const target = createNpmPackageTarget({
+    id: 'dsh',
+    label: 'dsh',
+    packageName: '@deepseek-ai/dsh',
+    currentVersion: () => '0.1.0',
+    apply: async (v) => { applied = v },
+    fetchFn: async () => ({ ok: true, status: 200, json: async () => ({ version: '0.2.0' }) }),
+  })
+  await target.check()
+  await target.download(() => {})
+  target.install()
+  assert.strictEqual(applied, '0.2.0')
+})
+
 test('config: updater defaults', () => {
   const cfg = config.loadFrom('/nonexistent-config.json')
-  assert.deepStrictEqual(cfg.updater, { enabled: true, autoCheck: true, autoDownload: true, feedUrl: null })
+  assert.deepStrictEqual(cfg.updater, {
+    enabled: true,
+    autoCheck: true,
+    autoDownload: true,
+    feedUrl: null,
+    runtime: { mode: null, package: '@deepseek-ai/dsh' },
+  })
 })
 
 test('config: updater section merges sub-keys with defaults', () => {
   const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-cfg-')), 'config.json')
-  fs.writeFileSync(file, JSON.stringify({ updater: { feedUrl: 'https://x/latest.json' } }))
+  fs.writeFileSync(file, JSON.stringify({ updater: { feedUrl: 'https://x/latest.json', runtime: { mode: 'none' } } }))
   const cfg = config.loadFrom(file)
-  assert.deepStrictEqual(cfg.updater, { enabled: true, autoCheck: true, autoDownload: true, feedUrl: 'https://x/latest.json' })
+  assert.deepStrictEqual(cfg.updater, {
+    enabled: true,
+    autoCheck: true,
+    autoDownload: true,
+    feedUrl: 'https://x/latest.json',
+    runtime: { mode: 'none', package: '@deepseek-ai/dsh' },
+  })
   fs.rmSync(path.dirname(file), { recursive: true, force: true })
 })

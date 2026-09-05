@@ -11,6 +11,10 @@
     "enabled": true,
     "autoCheck": true,
     "autoDownload": true,
-    "feedUrl": null
+    "feedUrl": null,
+    "runtime": {
+      "mode": null,
+      "package": "@deepseek-ai/dsh"
+    }
   }
 }
