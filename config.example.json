@@ -4,6 +4,13 @@
   "host": "127.0.0.1",
   "port": null,
   "openBrowser": false,
+  "notify": true,
   "extraArgs": [],
-  "editor": null
+  "editor": null,
+  "updater": {
+    "enabled": true,
+    "autoCheck": true,
+    "autoDownload": true,
+    "feedUrl": null
+  }
 }

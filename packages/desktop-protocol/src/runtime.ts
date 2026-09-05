@@ -10,6 +10,7 @@ import type {
   DesktopDirectoryPickerOptions,
   DesktopWindowSpec,
   DesktopWindowHandle,
+  DesktopUpdateStatus,
 } from './types'
 import type { DesktopEvent } from './events'
 
@@ -64,6 +65,16 @@ export interface DesktopRuntime {
   // ---- 外观 ----
   setTheme(source: DesktopThemeSource): void
   setLocale(locale: DesktopLocale): void
+
+  // ---- 升级 ----
+  /** 检查更新；结果经 `update/state` 事件推送，并作为返回值。 */
+  checkForUpdates(): Promise<DesktopUpdateStatus | null>
+  /** 下载已发现的更新（manual 模式下载到本地，auto 模式走框架更新器）。 */
+  downloadUpdate(): Promise<DesktopUpdateStatus | null>
+  /** 安装并重启（auto 模式），或打开已下载安装包（manual 模式）。 */
+  quitAndInstall(): void
+  /** 当前升级状态快照。 */
+  getUpdateStatus(): DesktopUpdateStatus | null
 
   // ---- 生命周期 ----
   quit(): void

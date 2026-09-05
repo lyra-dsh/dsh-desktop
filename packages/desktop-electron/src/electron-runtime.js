@@ -61,6 +61,11 @@ class ElectronDesktopRuntime {
     this.keepAwakeEnabled = true
     this.keepAwakeActive = false
     this.isQuitting = false
+    this.updater = config.updater || null
+    // 升级状态（来自注入的 updater）→ 转成 Shell → Host 事件推出去。
+    if (this.updater && typeof this.updater.subscribe === 'function') {
+      this.updater.subscribe((status) => this.emit({ type: 'update/state', status }))
+    }
 
     // 用户触发退出（Cmd+Q / 系统退出）→ 上报，由 Host 清理后回 quit()。
     app.on('before-quit', (event) => {
@@ -307,6 +312,12 @@ class ElectronDesktopRuntime {
   // ---- 外观 ----
   setTheme(source) { nativeTheme.themeSource = source }
   setLocale(locale) { this._locale = locale }
+
+  // ---- 升级 ----
+  async checkForUpdates() { return this.updater ? this.updater.check() : null }
+  async downloadUpdate() { return this.updater ? this.updater.download() : null }
+  quitAndInstall() { if (this.updater) this.updater.install() }
+  getUpdateStatus() { return this.updater ? this.updater.getStatus() : null }
 
   // ---- 生命周期 ----
   quit() { this.isQuitting = true; app.quit() }

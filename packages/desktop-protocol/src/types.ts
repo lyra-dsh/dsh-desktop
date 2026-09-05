@@ -90,6 +90,30 @@ export interface DesktopWindowHandle {
   setTitle(title: string): void
 }
 
+/** 升级状态机的一个状态（纯数据，可序列化）。 */
+export interface DesktopUpdateStatus {
+  state:
+    | 'idle'
+    | 'checking'
+    | 'available'
+    | 'not-available'
+    | 'downloading'
+    | 'downloaded'
+    | 'error'
+  /** 升级目标 id（如 'shell'、'dsh'）。 */
+  target?: string
+  /** 可用新版本号。 */
+  version?: string
+  /** 当前版本号。 */
+  currentVersion?: string
+  /** 下载进度 0–100（仅 downloading 时有效）。 */
+  percent?: number
+  /** 错误信息（仅 error 时有效）。 */
+  error?: string
+  /** 可打开的下载/发布页 URL（manual 模式或 available 时）。 */
+  releaseUrl?: string
+}
+
 /** 启动契约：Host 启动壳子时一次性传入。 */
 export interface DesktopShellConfig {
   productName: string

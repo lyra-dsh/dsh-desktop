@@ -1,4 +1,4 @@
-import type { DesktopThemeSource } from './types'
+import type { DesktopThemeSource, DesktopUpdateStatus } from './types'
 
 /**
  * 壳子推回给 Host 的事件。
@@ -21,3 +21,5 @@ export type DesktopEvent =
   | { type: 'renderer/boot'; windowId: string; status: 'ok' | 'failed'; error?: string }
   /** 系统深浅色切换。 */
   | { type: 'theme/changed'; source: DesktopThemeSource }
+  /** 升级状态变化。 */
+  | { type: 'update/state'; status: DesktopUpdateStatus }

@@ -13,13 +13,14 @@
  * 这里不实现"壳子能力"（窗口/托盘），那些都在 desktop-electron 里。
  */
 
-const { app, dialog } = require('electron')
+const { app, dialog, shell } = require('electron')
 const path = require('node:path')
 const config = require('./config')
 const dsh = require('./dsh')
 const plugins = require('./plugins')
 const { DshState } = require('./state')
 const { ElectronDesktopRuntime } = require('@omnilyra/desktop-electron')
+const { createUpdater, createFeedTarget } = require('@omnilyra/desktop-updater')
 
 const TRAY_ICON_PATH = dsh.unpackedAsarPath(path.join(__dirname, '..', 'build', 'tray.png'))
 
@@ -34,8 +35,28 @@ function showError(detail) {
   app.exit(1)
 }
 
+/** 按配置构建升级器；未启用 / 无 feedUrl 时返回 null。 */
+function buildUpdater(cfg) {
+  const u = cfg.updater
+  if (!u || !u.enabled || !u.feedUrl) return null
+  return createUpdater({
+    targets: [
+      createFeedTarget({
+        id: 'shell',
+        label: 'dsh Desktop',
+        feedUrl: u.feedUrl,
+        currentVersion: () => app.getVersion(),
+        downloadsDir: () => app.getPath('downloads'),
+        openFile: (p) => shell.openPath(p),
+      }),
+    ],
+    autoDownload: u.autoDownload !== false,
+  })
+}
+
 async function boot() {
   const cfg = config.loadForApp()
+  const updater = buildUpdater(cfg)
   const entry = await dsh.resolveEntry(cfg)
   const notifyArgs = cfg.notify ? plugins.ensureDesktopPlugins(cfg.profile) : []
   const child = dsh.spawnDsh(cfg, entry, process.env, notifyArgs)
@@ -60,6 +81,7 @@ async function boot() {
     minHeight: 600,
     theme: 'system',
     locale: 'en',
+    updater,
   })
   runtime.createMainWindow()
 
@@ -95,6 +117,23 @@ async function boot() {
   const killDshAndQuit = () => state.killGracefully(1500, () => runtime.quit())
   const killDshAndRestart = () => state.killGracefully(1500, () => runtime.restart())
 
+  /** 升级状态 → 弹窗 / 日志。安装前弹窗确认（策略）。 */
+  const handleUpdateStatus = async (status) => {
+    if (status.state === 'downloaded') {
+      const res = await dialog.showMessageBox({
+        type: 'info',
+        title: '更新已下载',
+        message: `新版本 ${status.version || ''} 已下载，是否打开安装包？`,
+        buttons: ['打开安装包', '稍后'],
+        defaultId: 0,
+        cancelId: 1,
+      })
+      if (res.response === 0 && updater) updater.install()
+    } else if (status.state === 'error') {
+      console.error('[dsh-desktop] update error:', status.error)
+    }
+  }
+
   runtime.subscribe((event) => {
     switch (event.type) {
       case 'window/close-requested':
@@ -113,11 +152,19 @@ async function boot() {
         }
         else if (event.itemId === 'quit') killDshAndQuit()
         break
+      case 'update/state':
+        handleUpdateStatus(event.status)
+        break
       case 'quit/requested':
         killDshAndQuit()
         break
     }
   })
+
+  // 启动自动检查更新（策略：autoCheck）。
+  if (updater && cfg.updater.autoCheck !== false) {
+    updater.check().catch((err) => console.error('[dsh-desktop] update check error:', err))
+  }
 
   app.on('activate', () => runtime.show())
   app.on('window-all-closed', () => { /* 托盘驻留 */ })

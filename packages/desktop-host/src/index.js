@@ -96,6 +96,12 @@ function createTransportRuntime(transport) {
     setTheme: (source) => call('setTheme', [source]),
     setLocale: (locale) => call('setLocale', [locale]),
 
+    // 升级
+    checkForUpdates: () => call('checkForUpdates', []),
+    downloadUpdate: () => call('downloadUpdate', []),
+    quitAndInstall: () => call('quitAndInstall', []),
+    getUpdateStatus: () => call('getUpdateStatus', []),
+
     // 生命周期
     quit: () => call('quit', []),
     restart: () => call('restart', []),

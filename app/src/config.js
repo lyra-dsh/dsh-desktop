@@ -21,6 +21,13 @@ const DEFAULT_CONFIG = Object.freeze({
   notify: true,
   extraArgs: [],
   editor: null,
+  updater: Object.freeze({
+    enabled: true,
+    autoCheck: true,
+    autoDownload: true,
+    // 版本清单 URL（manual 模式）：JSON { version, url }。空则禁用自动升级。
+    feedUrl: null,
+  }),
 })
 
 /** The argv passed to dsh, mirroring Config::cli_args(). */
@@ -83,6 +90,10 @@ function loadFrom(filePath) {
   // Normalize: extraArgs must be an array of strings; dshBin/host/editor null or string.
   if (!Array.isArray(cfg.extraArgs)) cfg.extraArgs = []
   cfg.extraArgs = cfg.extraArgs.map(String)
+  // updater 是嵌套对象：按子键合并，缺失子键回退默认。
+  if (parsed.updater && typeof parsed.updater === 'object') {
+    cfg.updater = { ...DEFAULT_CONFIG.updater, ...parsed.updater }
+  }
   return cfg
 }
 
