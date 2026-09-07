@@ -41,14 +41,23 @@ test('resolveEntry: env override wins over null dshBin', async () => {
   assert.deepStrictEqual(entry, { kind: 'external', entry: '/opt/dsh' })
 })
 
-test('buildPath dedupes and keeps a stable order', () => {
+test('buildPath preserves order for a rich PATH and appends missing dirs', () => {
   const p = dsh.buildPath({ HOME: '/Users/u', PATH: '/opt/homebrew/bin:/usr/bin' })
   const parts = p.split(':')
-  assert.strictEqual(new Set(parts).size, parts.length)
-  assert.ok(parts.includes('/opt/homebrew/bin'))
-  assert.ok(parts.includes('/usr/bin'))
+  assert.strictEqual(new Set(parts).size, parts.length) // 去重
+  // 原顺序保持（homebrew 在最前）
+  assert.strictEqual(parts[0], '/opt/homebrew/bin')
+  assert.strictEqual(parts[1], '/usr/bin')
+  // 缺失的工具/系统目录补到末尾
+  assert.ok(parts.includes('/Users/u/.local/bin'))
   assert.ok(parts.includes('/bin'))
-  // 现在也带上 commonDshDirs 里的用户工具目录
+  assert.ok(parts.indexOf('/Users/u/.local/bin') > parts.indexOf('/usr/bin'))
+})
+
+test('buildPath prepends tool dirs for a minimal GUI PATH', () => {
+  const p = dsh.buildPath({ HOME: '/Users/u', PATH: '/usr/bin:/bin' })
+  const parts = p.split(':')
+  assert.ok(parts.includes('/opt/homebrew/bin'))
   assert.ok(parts.includes('/Users/u/.local/bin'))
   assert.ok(parts.indexOf('/Users/u/.local/bin') < parts.indexOf('/usr/bin'))
 })

@@ -177,16 +177,21 @@ function unpackedAsarPath(p) {
 const ENV_DENYLIST = new Set([])
 
 /**
- * 重建子进程 PATH：常见工具目录（nvm node / bun / ~/.local / homebrew）+
- * 系统目录 + 继承的 PATH。GUI 启动时 PATH 精简，这里补全，否则 dsh 及其沙箱
- * 找不到 node / bun / npm 全局工具等命令。
+ * 重建子进程 PATH。
+ * - 继承 PATH 已「丰富」（含 homebrew / nvm / bun / ~/.local 等用户工具目录，
+ *   比如登录 shell 抓取之后）→ 保持原顺序，只把缺失的工具/系统目录补到末尾；
+ * - 否则（GUI 启动的最小 PATH）→ 工具目录 + 系统目录前置，避免 /usr/bin/node 存根抢先。
  */
 function buildPath(env = process.env) {
-  const parts = []
-  parts.push(...commonDshDirs(env))
-  parts.push('/usr/bin', '/bin', '/usr/sbin', '/sbin')
-  if (env.PATH) parts.push(...env.PATH.split(':').filter(Boolean))
-  return [...new Set(parts)].join(':')
+  const existing = env.PATH ? env.PATH.split(':').filter(Boolean) : []
+  const fallback = [...commonDshDirs(env), '/usr/bin', '/bin', '/usr/sbin', '/sbin']
+  const rich = /\/opt\/homebrew|\.nvm\/|\.bun\/|\.local\/bin/.test(env.PATH || '')
+  if (rich) {
+    const out = [...existing]
+    for (const dir of fallback) if (!out.includes(dir)) out.push(dir)
+    return out.join(':')
+  }
+  return [...new Set([...fallback, ...existing])].join(':')
 }
 
 /** 传给 dsh 子进程的环境：全量透传（去黑名单），PATH 用重建后的完整值覆盖 GUI 的精简 PATH。 */

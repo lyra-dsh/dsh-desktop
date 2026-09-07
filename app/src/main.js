@@ -21,6 +21,7 @@ const plugins = require('./plugins')
 const { DshState } = require('./state')
 const { ElectronDesktopRuntime } = require('@omnilyra/desktop-electron')
 const { createUpdater, createFeedTarget, createElectronUpdaterTarget, createNpmPackageTarget } = require('@omnilyra/desktop-updater')
+const { resolveDesktopShellEnv } = require('./shell-env')
 
 const TRAY_ICON_PATH = dsh.unpackedAsarPath(path.join(__dirname, '..', 'build', 'tray.png'))
 
@@ -100,6 +101,14 @@ function buildUpdater(cfg, entry, dshVer, dshMode, state, runtime) {
 
 async function boot() {
   const cfg = config.loadForApp()
+  // 打包后的 Unix：source 登录 shell，把终端的 PATH/环境变量补进 process.env。
+  const shellEnv = await resolveDesktopShellEnv({
+    environment: process.env,
+    isPackaged: app.isPackaged,
+    platform: process.platform,
+  })
+  for (const [name, value] of Object.entries(shellEnv.updates)) process.env[name] = value
+  if (shellEnv.fallbackReason) console.log(`[dsh-desktop] shell env: source=${shellEnv.source} fallback=${shellEnv.fallbackReason}`)
   const entry = await dsh.resolveEntry(cfg)
   const dshVer = await dsh.dshVersion(entry)
   const dshMode = resolveDshMode(cfg, entry)
