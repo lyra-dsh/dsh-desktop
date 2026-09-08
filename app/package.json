@@ -18,7 +18,6 @@
     "@omnilyra/desktop-notifications": "*",
     "@omnilyra/desktop-badge": "*",
     "@omnilyra/desktop-keep-awake": "*",
-    "@omnilyra/desktop-opener": "*",
     "@omnilyra/desktop-updater": "*",
     "pnpm": "9.10.0"
   },

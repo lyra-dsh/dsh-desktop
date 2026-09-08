@@ -17,7 +17,6 @@
 ┌────────────────────────────────────────────────────────────────┐
 │ 功能插件层（跑在 dsh 进程内，Cordis 插件）                        │
 │   desktop-notifications / desktop-badge / desktop-keep-awake     │
-│   desktop-opener(host 半 + client 半)                            │
 │   统一通过 ctx.desktopRuntime 调壳子能力                          │
 ├────────────────────────────────────────────────────────────────┤
 │ Host 适配层 desktop-host（跑在 dsh 进程内）                       │
@@ -295,7 +294,6 @@ updater.subscribe(async (status) => {
 | `desktop-notifications` | dsh 内 | `['desktopRuntime']` | 会话完成/出错/审批/提问 → 系统通知 | `notify` |
 | `desktop-badge` | dsh 内 | `['desktopRuntime']` | 会话状态 → 托盘红/黄/绿点 | `setBadge` |
 | `desktop-keep-awake` | dsh 内 | `['desktopRuntime']` | 运行时防休眠（允许息屏） | `setKeepAwake` |
-| `desktop-opener` | dsh 内（双面包） | host: `['connection','sessions','sessionQuery']`；client: `['slots']` | 会话头部「打开项目」：用外部编辑器打开工作区 | 自己的 HTTP 路由 + `spawn('open')` |
 | `desktop-host` | dsh 内 | 无（提供服务） | 把壳子能力以 IPC 代理注册成 `ctx.desktopRuntime` | （提供者） |
 | `desktop-electron` | 壳子主进程 | 无 | `ElectronDesktopRuntime` 实现协议 | （实现者） |
 | `desktop-updater` | 壳子主进程 | 无 | 升级状态机 + 目标 | 协议升级方法 |

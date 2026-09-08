@@ -12,7 +12,7 @@ const os = require('node:os')
 const path = require('node:path')
 const { app } = require('electron')
 
-const PLUGINS = ['desktop-host', 'desktop-notifications', 'desktop-badge', 'desktop-keep-awake', 'desktop-opener']
+const PLUGINS = ['desktop-host', 'desktop-notifications', 'desktop-badge', 'desktop-keep-awake']
 
 /** Map app.asar → app.asar.unpacked（与 dsh.js 同款）。 */
 function unpackedAsarPath(p) {
@@ -70,8 +70,6 @@ function patchContent() {
     "      name: '@omnilyra/desktop-badge'",
     '    - id: desktop-keep-awake',
     "      name: '@omnilyra/desktop-keep-awake'",
-    '    - id: desktop-opener',
-    "      name: '@omnilyra/desktop-opener'",
     '',
   ].join('\n')
 }
