@@ -13,14 +13,13 @@ const path = require('node:path')
 
 /** Default config object; mirrors Config::default() in config.rs. */
 const DEFAULT_CONFIG = Object.freeze({
-  profile: 'web',
+  profile: 'lyra-dsh',
   dshBin: null,
   host: '127.0.0.1',
   port: 0, // 0 = OS 自动分配空闲端口，避免与残留 dsh 撞端口（EADDRINUSE）
   openBrowser: false,
   notify: true,
   extraArgs: [],
-  editor: null,
   updater: Object.freeze({
     enabled: true,
     autoCheck: true,
@@ -86,7 +85,13 @@ function loadFrom(filePath) {
   const cfg = { ...DEFAULT_CONFIG }
   if (!fs.existsSync(filePath)) return cfg
   const text = fs.readFileSync(filePath, 'utf8')
-  const parsed = JSON.parse(text)
+  let parsed
+  try {
+    parsed = JSON.parse(text)
+  } catch (cause) {
+    console.warn(`[lyra-dsh] config ${filePath} is not valid JSON (${cause.message}); using defaults`)
+    return cfg
+  }
   if (parsed === null || typeof parsed !== 'object') return cfg
   // camelCase keys (serde rename_all = "camelCase"); missing keys keep defaults.
   for (const key of Object.keys(DEFAULT_CONFIG)) {
@@ -94,9 +99,13 @@ function loadFrom(filePath) {
       cfg[key] = parsed[key]
     }
   }
-  // Normalize: extraArgs must be an array of strings; dshBin/host/editor null or string.
+  // Normalize: extraArgs must be an array of strings; dshBin/host null or string.
   if (!Array.isArray(cfg.extraArgs)) cfg.extraArgs = []
   cfg.extraArgs = cfg.extraArgs.map(String)
+  // profile/host 必须是字符串(非空则用,否则回退默认);dshBin 必须为 null 或字符串。
+  if (typeof cfg.profile !== 'string' || cfg.profile === '') cfg.profile = DEFAULT_CONFIG.profile
+  if (typeof cfg.host !== 'string' || cfg.host === '') cfg.host = DEFAULT_CONFIG.host
+  if (cfg.dshBin !== null && typeof cfg.dshBin !== 'string') cfg.dshBin = DEFAULT_CONFIG.dshBin
   // updater 是嵌套对象：按子键合并，缺失子键回退默认。
   if (parsed.updater && typeof parsed.updater === 'object') {
     cfg.updater = { ...DEFAULT_CONFIG.updater, ...parsed.updater }

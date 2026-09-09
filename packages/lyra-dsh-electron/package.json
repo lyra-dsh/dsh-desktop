@@ -1,0 +1,18 @@
+{
+  "name": "@omnilyra/lyra-dsh-electron",
+  "version": "0.2.0",
+  "description": "Electron implementation of the DesktopRuntime protocol.",
+  "main": "src/index.js",
+  "files": [
+    "src"
+  ],
+  "peerDependencies": {
+    "@omnilyra/lyra-dsh-protocol": "^0.2.0",
+    "electron": ">=28"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/lyra-dsh/dsh-desktop.git"
+  }
+}

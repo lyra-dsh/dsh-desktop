@@ -13,12 +13,12 @@ if (process.platform !== 'darwin') {
   process.exit(0)
 }
 
-// 找 release/<dir>/Dsh-Desktop.app（mac-arm64 / mac / mac-x64 等目录下）。
+// 找 release/<dir>/Lyra DSH.app（mac-arm64 / mac / mac-x64 等目录下）。
 const releaseDir = path.join(__dirname, '..', 'release')
 let appPath = null
 try {
   for (const name of fs.readdirSync(releaseDir)) {
-    const candidate = path.join(releaseDir, name, 'Dsh-Desktop.app')
+    const candidate = path.join(releaseDir, name, 'Lyra DSH.app')
     if (fs.existsSync(candidate)) {
       appPath = candidate
       break
@@ -27,7 +27,7 @@ try {
 } catch { /* release 目录不存在 */ }
 
 if (!appPath) {
-  console.error('[sign-mac] Dsh-Desktop.app not found under release/')
+  console.error('[sign-mac] Lyra DSH.app not found under release/')
   process.exit(1)
 }
 

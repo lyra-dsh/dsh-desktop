@@ -1,0 +1,422 @@
+'use strict'
+
+// dsh 供给：系统 dsh 优先；找不到就运行时安装一份"私有 dsh"到 userData 目录，
+// 用 Electron 的 Node（ELECTRON_RUN_AS_NODE + --expose-internals）跑。
+// 显式 `dshBin`（或 DSH_DESKTOP_DSH_BIN）是开发逃生口，永远最优先。
+
+const { spawn } = require('node:child_process')
+const readline = require('node:readline')
+const net = require('node:net')
+const path = require('node:path')
+const os = require('node:os')
+const fs = require('node:fs')
+const { app } = require('electron')
+const semver = require('semver')
+
+const RUN_AS_NODE = 'ELECTRON_RUN_AS_NODE'
+const DSH_PACKAGE = '@deepseek-ai/dsh'
+const DSH_VERSION = '0.1.2-alpha.3'
+const DSH_RANGE = '>=0.1.3-alpha.2 <1.0.0-0'
+const READY_TIMEOUT_MS = 60_000
+const FALLBACK_PROBE_MS = 20_000
+const PROBE_INTERVAL_MS = 500
+
+/** 版本闸门：校验 dsh 运行时版本是否落在受支持区间（修 M11）。 */
+function checkCompatibility(version) {
+  if (!version || typeof version !== 'string') return { ok: false, reason: 'unknown dsh version' }
+  if (semver.satisfies(version.trim(), DSH_RANGE, { includePrerelease: true })) return { ok: true }
+  return { ok: false, reason: `dsh ${version} is outside the supported range ${DSH_RANGE}` }
+}
+
+/** 依据 cfg.host 构造匹配 dsh 打印的 http URL 的正则（修 M10：URL 不再写死 127.0.0.1）。 */
+function urlRegex(host) {
+  const esc = String(host).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const h = host === '0.0.0.0' ? '(?:127\\.0\\.0\\.1|localhost)' : esc
+  return new RegExp(`http://(?:${h}|localhost):\\d+\\S*`)
+}
+
+/** dsh 数据根：$DSH_HOME || ~/.dsh（与 @deepseek-ai/dsh-home-paths 一致）。 */
+function dshHome(env = process.env) {
+  const h = env.DSH_HOME && env.DSH_HOME.trim() ? env.DSH_HOME : path.join(env.HOME || os.homedir(), '.dsh')
+  return h
+}
+
+/** dsh 某 profile 的 node_modules 目录（供历史/测试引用；新 bootstrap 走 plugin add）。 */
+function profileNodeModules(profile, env = process.env) {
+  return path.join(dshHome(env), 'profiles', profile, 'node_modules')
+}
+
+/**
+ * 传给 dsh 子进程的 argv。镜像 app/src/config.js 的 Config::cli_args()（此处内联以
+ * 保持供给层自包含、不反向依赖壳子）。
+ */
+function toCliArgs(cfg) {
+  const args = ['--profile', cfg.profile]
+  if (cfg.host !== null && cfg.host !== undefined && cfg.host !== '') {
+    args.push('--host', cfg.host)
+  }
+  // null 才省略 --port（用 dsh 默认端口）；0 必须显式传，让 dsh 自己分配。
+  if (cfg.port !== null && cfg.port !== undefined) {
+    args.push('--port', String(cfg.port))
+  }
+  if (!cfg.openBrowser) {
+    args.push('--no-open')
+  }
+  args.push(...cfg.extraArgs)
+  return args
+}
+
+// ---- 系统 dsh 检测：PATH 优先，再补常见安装位置 ----
+
+/**
+ * GUI 应用（Finder/Dock 启动）拿到的 PATH 是精简的，不含 nvm / homebrew 等目录；
+ * 因此除了 PATH，再扫一遍常见安装位置。
+ */
+function commonDshDirs(env = process.env) {
+  const home = env.HOME || os.homedir()
+  const dirs = []
+  // nvm 各版本 bin（npm i -g 装的 dsh 通常在这），新版本优先
+  const nvm = path.join(home, '.nvm', 'versions', 'node')
+  try {
+    for (const v of fs.readdirSync(nvm).sort().reverse()) {
+      if (/^v\d/.test(v)) dirs.push(path.join(nvm, v, 'bin'))
+    }
+  } catch { /* 无 nvm */ }
+  dirs.push(path.join(home, '.local', 'bin'))
+  dirs.push(path.join(home, '.bun', 'bin'))
+  dirs.push('/opt/homebrew/bin')
+  dirs.push('/usr/local/bin')
+  return dirs
+}
+
+/** 找系统 dsh：先 PATH，再常见位置；返回绝对路径或 null。 */
+function resolveSystemDsh(env = process.env) {
+  if (env.DSH_DESKTOP_DSH_BIN && env.DSH_DESKTOP_DSH_BIN.length > 0) {
+    return env.DSH_DESKTOP_DSH_BIN
+  }
+  const dirs = []
+  if (env.PATH) dirs.push(...env.PATH.split(':').filter(Boolean))
+  dirs.push(...commonDshDirs(env))
+  for (const dir of dirs) {
+    if (!dir) continue
+    const p = path.join(dir, 'dsh')
+    if (fs.existsSync(p)) return p
+  }
+  return null
+}
+
+// ---- 私有 dsh（兜底安装）----
+function provisionDir() {
+  return path.join(app.getPath('userData'), 'dsh')
+}
+
+function provisionBinJs() {
+  return path.join(provisionDir(), 'node_modules', DSH_PACKAGE, 'lib', 'bin.js')
+}
+
+function provisionMarker() {
+  return path.join(provisionDir(), '.installed')
+}
+
+function provisioned() {
+  return fs.existsSync(provisionMarker()) && fs.existsSync(provisionBinJs())
+}
+
+/**
+ * 解析打包进来的 pnpm 的 CLI 入口。
+ * pnpm 9 的 exports 把 "." 映射到 ./package.json，所以 require.resolve('pnpm')
+ * 直接得到其 package.json 路径；由此推导 bin/pnpm.cjs 并映射到 unpacked 物理路径。
+ */
+function resolvePnpmCli() {
+  const pkgPath = require.resolve('pnpm')
+  const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'))
+  const rel = (pkg.bin && (pkg.bin.pnpm || (typeof pkg.bin === 'string' ? pkg.bin : null))) || null
+  if (!rel) throw new Error('pnpm: no bin entry')
+  return unpackedAsarPath(path.join(path.dirname(pkgPath), rel))
+}
+
+/** 用 Electron 的 Node 跑 pnpm，把 dsh（指定版本）装到私有目录。 */
+function runPnpmInstall(dir, version = DSH_VERSION) {
+  return new Promise((resolve, reject) => {
+    const pnpm = resolvePnpmCli()
+    const child = spawn(process.execPath, [pnpm, 'add', `${DSH_PACKAGE}@${version}`, '--dir', dir], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: { ...process.env, [RUN_AS_NODE]: '1' },
+    })
+    let output = ''
+    child.stdout.on('data', (d) => { output += d })
+    child.stderr.on('data', (d) => { output += d })
+    child.on('error', reject)
+    child.on('close', (code) => {
+      if (code === 0) {
+        try { fs.writeFileSync(provisionMarker(), version) } catch { /* 非致命：下次仍会重装 */ }
+        resolve()
+      } else {
+        reject(new Error(`dsh 安装失败 (code ${code}): ${output.slice(-1500)}`))
+      }
+    })
+  })
+}
+
+/** 安装并返回私有 dsh 的 bin.js；已装则直接复用。 */
+async function provisionDsh() {
+  const dir = provisionDir()
+  if (provisioned()) return provisionBinJs()
+  fs.mkdirSync(dir, { recursive: true })
+  await runPnpmInstall(dir)
+  return provisionBinJs()
+}
+
+/** 升级兜底 dsh 到指定版本（已装也重装）；返回新 bin.js。 */
+async function upgradeProvisionedDsh(version) {
+  const dir = provisionDir()
+  fs.mkdirSync(dir, { recursive: true })
+  await runPnpmInstall(dir, version)
+  return provisionBinJs()
+}
+
+/** 运行 resolved entry 的 `--version`，返回版本字符串或 null。 */
+function dshVersion(entry) {
+  return new Promise((resolve) => {
+    const cmd = entry.kind === 'bundled' ? process.execPath : entry.entry
+    const args = entry.kind === 'bundled' ? ['--expose-internals', entry.entry, '--version'] : ['--version']
+    const env = entry.kind === 'bundled' ? { ...process.env, [RUN_AS_NODE]: '1' } : process.env
+    let child
+    try { child = spawn(cmd, args, { stdio: ['ignore', 'pipe', 'pipe'], env }) } catch { resolve(null); return }
+    let out = ''
+    let err = ''
+    child.stdout.on('data', (d) => { out += d })
+    child.stderr.on('data', (d) => { err += d })
+    child.on('error', () => resolve(null))
+    child.on('close', () => {
+      const v = (out.trim() || err.trim())
+      resolve(v || null)
+    })
+  })
+}
+
+// ---- 入口解析：显式 > 系统 > 私有兜底 ----
+/**
+ * @returns {Promise<{ kind: 'external'|'bundled', entry: string }>}
+ */
+async function resolveEntry(cfg, env = process.env) {
+  if (cfg.dshBin && String(cfg.dshBin).length > 0) {
+    return { kind: 'external', entry: String(cfg.dshBin) }
+  }
+  const sys = resolveSystemDsh(env)
+  if (sys) return { kind: 'external', entry: sys }
+  const binJs = await provisionDsh()
+  return { kind: 'bundled', entry: binJs }
+}
+
+/** Map a path inside app.asar to its sibling unpacked physical path. */
+function unpackedAsarPath(p) {
+  return p.replace(/([\\/])app\.asar([\\/])/u, '$1app.asar.unpacked$2')
+}
+
+/**
+ * 传给 dsh 子进程时被剔除的环境变量黑名单（key 精确匹配）。
+ * 目前为空——全量透传；后续若发现某个变量会干扰 dsh / Electron，再往这里加
+ * （例如 ELECTRON_RUN_AS_NODE 之类的 Electron 专属变量）。
+ */
+const ENV_DENYLIST = new Set([])
+
+/**
+ * 重建子进程 PATH。
+ * - 继承 PATH 已「丰富」（含 homebrew / nvm / bun / ~/.local 等用户工具目录，
+ *   比如登录 shell 抓取之后）→ 保持原顺序，只把缺失的工具/系统目录补到末尾；
+ * - 否则（GUI 启动的最小 PATH）→ 工具目录 + 系统目录前置，避免 /usr/bin/node 存根抢先。
+ */
+function buildPath(env = process.env) {
+  const existing = env.PATH ? env.PATH.split(':').filter(Boolean) : []
+  const fallback = [...commonDshDirs(env), '/usr/bin', '/bin', '/usr/sbin', '/sbin']
+  const rich = /\/opt\/homebrew|\.nvm\/|\.bun\/|\.local\/bin/.test(env.PATH || '')
+  if (rich) {
+    const out = [...existing]
+    for (const dir of fallback) if (!out.includes(dir)) out.push(dir)
+    return out.join(':')
+  }
+  return [...new Set([...fallback, ...existing])].join(':')
+}
+
+/** 传给 dsh 子进程的环境：全量透传（去黑名单），PATH 用重建后的完整值覆盖 GUI 的精简 PATH。 */
+function buildEnv(extra = {}, env = process.env) {
+  const out = {}
+  for (const [key, value] of Object.entries(env)) {
+    if (value === undefined) continue
+    if (ENV_DENYLIST.has(key)) continue
+    out[key] = value
+  }
+  out.PATH = buildPath(env)
+  return Object.assign(out, extra)
+}
+
+/**
+ * 组装 dsh argv。dsh 启动器只解析自己的 flag（--profile / --patch / --dump-* …），
+ * 遇到第一个无法识别的 token 就把其后全部交给 profile 应用；因此启动器 flag 必须
+ * 放在第一个应用 flag（--host / --port / --no-open）之前。
+ */
+function buildArgs(cfg, extraArgs = []) {
+  const base = toCliArgs(cfg)
+  // --profile <name> 是前两项；把 extraArgs（--patch 等启动器 flag）插在它之后。
+  return [...base.slice(0, 2), ...extraArgs, ...base.slice(2)]
+}
+
+/**
+ * Spawn dsh。`bundled`（私有/打包）用 Electron 的 Node 跑 bin.js；`external` 走 shebang。
+ * `detached: true` 使其自成进程组（pid == pgid）。
+ */
+function spawnDsh(cfg, entry, env = process.env, extraArgs = []) {
+  const args = buildArgs(cfg, extraArgs)
+  if (entry.kind === 'bundled') {
+    // --expose-internals：dsh 的 loader/HMR 需要；在 Electron 的 Node 下必须显式传。
+    // stdio 第 4 项 'ipc'：给 dsh 里的 lyra-dsh-bridge 插件一条与壳子通信的 IPC 通道。
+    return spawn(process.execPath, ['--expose-internals', entry.entry, ...args], {
+      stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
+      env: buildEnv({ [RUN_AS_NODE]: '1' }, env),
+      detached: true,
+    })
+  }
+  return spawn(entry.entry, args, {
+    stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
+    env: buildEnv({}, env),
+    detached: true,
+  })
+}
+
+/** The port we may probe if stdout doesn't reveal the URL soon enough. */
+function resolveFallbackPort(cfg) {
+  if (cfg.port === null || cfg.port === undefined) return 3080
+  if (cfg.port === 0) return null
+  return cfg.port
+}
+
+/** Poll until the loopback port accepts a TCP connection, or the timeout elapses. */
+function probePort(port, timeoutMs = FALLBACK_PROBE_MS) {
+  const deadline = Date.now() + timeoutMs
+  return new Promise((resolve) => {
+    const attempt = () => {
+      const socket = net.connect({ host: '127.0.0.1', port })
+      let settled = false
+      const finish = (ok) => {
+        if (settled) return
+        settled = true
+        socket.destroy()
+        resolve(ok)
+      }
+      socket.once('connect', () => finish(true))
+      socket.once('error', () => {
+        socket.destroy()
+        if (Date.now() >= deadline) finish(false)
+        else setTimeout(attempt, PROBE_INTERVAL_MS)
+      })
+    }
+    attempt()
+  })
+}
+
+/**
+ * Wait until dsh reports its loopback URL on stdout (with a port-probe fallback),
+ * capturing stderr for diagnostics.
+ */
+function waitForReady(child, cfg, { readyTimeoutMs = READY_TIMEOUT_MS } = {}) {
+  return new Promise((resolve, reject) => {
+    let stderrBuf = ''
+    let settled = false
+    let readyTimer = null
+
+    const captureUrl = (url) => {
+      if (settled) return
+      settled = true
+      if (readyTimer) clearTimeout(readyTimer)
+      resolve(url)
+    }
+    const fail = (detail) => {
+      if (settled) return
+      settled = true
+      if (readyTimer) clearTimeout(readyTimer)
+      reject(new Error(detail || 'dsh failed to start.'))
+    }
+
+    if (child.stderr) {
+      child.stderr.setEncoding('utf8')
+      child.stderr.on('data', (chunk) => {
+        stderrBuf += chunk
+        // 转发到壳子的 stderr，便于在终端看到 dsh / 插件的日志与错误。
+        process.stderr.write(chunk)
+      })
+    }
+
+    const detailFromStderr = (fallback) => {
+      const t = stderrBuf.trim()
+      return t.length > 0 ? t : fallback
+    }
+
+    if (child.stdout) {
+      const rl = readline.createInterface({ input: child.stdout })
+      let sent = false
+      rl.on('line', (line) => {
+        if (sent) return
+        const m = urlRegex(cfg.host).exec(line)
+        if (m) {
+          sent = true
+          captureUrl(m[0])
+        }
+      })
+      rl.on('close', () => {
+        if (!sent && !settled) fail(detailFromStderr('dsh exited before serving a URL.'))
+      })
+    } else if (!settled) {
+      fail('dsh exited before serving a URL.')
+    }
+
+    readyTimer = setTimeout(async () => {
+      const port = resolveFallbackPort(cfg)
+      if (port === null) {
+        fail(detailFromStderr('dsh did not report a URL within the timeout.'))
+        return
+      }
+      const up = await probePort(port)
+      if (up) captureUrl(`http://127.0.0.1:${port}`)
+      else fail(detailFromStderr(`dsh did not serve on port ${port} within the timeout.`))
+    }, readyTimeoutMs)
+
+    child.once('exit', (code, signal) => {
+      if (settled) return
+      const fallback = signal
+        ? `dsh exited on signal ${signal}.`
+        : `dsh exited with code ${code}.`
+      fail(detailFromStderr(fallback))
+    })
+  })
+}
+
+module.exports = {
+  RUN_AS_NODE,
+  DSH_PACKAGE,
+  DSH_VERSION,
+  DSH_RANGE,
+  unpackedAsarPath,
+  resolveSystemDsh,
+  commonDshDirs,
+  dshHome,
+  profileNodeModules,
+  provisionDir,
+  provisionBinJs,
+  resolvePnpmCli,
+  provisionDsh,
+  upgradeProvisionedDsh,
+  dshVersion,
+  resolveEntry,
+  buildPath,
+  buildEnv,
+  buildArgs,
+  spawnDsh,
+  resolveFallbackPort,
+  probePort,
+  waitForReady,
+  urlRegex,
+  checkCompatibility,
+  READY_TIMEOUT_MS,
+  FALLBACK_PROBE_MS,
+}

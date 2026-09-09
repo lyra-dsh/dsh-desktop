@@ -1,5 +1,5 @@
 {
-  "name": "dsh-desktop",
+  "name": "lyra-dsh",
   "version": "0.2.0",
   "description": "A generic Electron desktop shell for any dsh. Zero dsh runtime dependency: it detects a system dsh, or installs a private copy into userData at first launch.",
   "private": true,
@@ -12,13 +12,13 @@
     "test": "node --test"
   },
   "dependencies": {
-    "@omnilyra/desktop-protocol": "*",
-    "@omnilyra/desktop-host": "*",
-    "@omnilyra/desktop-electron": "*",
-    "@omnilyra/desktop-notifications": "*",
-    "@omnilyra/desktop-badge": "*",
-    "@omnilyra/desktop-keep-awake": "*",
-    "@omnilyra/desktop-updater": "*",
+    "@omnilyra/lyra-dsh-protocol": "^0.2.0",
+    "@omnilyra/lyra-dsh-bridge": "^0.2.0",
+    "@omnilyra/lyra-dsh-electron": "^0.2.0",
+    "@omnilyra/lyra-dsh-notifications": "^0.2.0",
+    "@omnilyra/lyra-dsh-badge": "^0.2.0",
+    "@omnilyra/lyra-dsh-keep-awake": "^0.2.0",
+    "@omnilyra/lyra-dsh-updater": "^0.2.0",
     "pnpm": "9.10.0"
   },
   "devDependencies": {
@@ -27,7 +27,7 @@
   },
   "build": {
     "appId": "com.omnilyra.dsh.desktop",
-    "productName": "Dsh-Desktop",
+    "productName": "Lyra DSH",
     "asar": true,
     "npmRebuild": false,
     "asarUnpack": [
@@ -48,7 +48,7 @@
     },
     "publish": {
       "provider": "generic",
-      "url": "https://updates.example.com/dsh-desktop"
+      "url": "https://updates.example.com/lyra-dsh"
     },
     "mac": {
       "target": [

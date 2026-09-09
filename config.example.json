@@ -1,12 +1,11 @@
 {
-  "profile": "web",
+  "profile": "lyra-dsh",
   "dshBin": null,
   "host": "127.0.0.1",
   "port": null,
   "openBrowser": false,
   "notify": true,
   "extraArgs": [],
-  "editor": null,
   "updater": {
     "enabled": true,
     "autoCheck": true,

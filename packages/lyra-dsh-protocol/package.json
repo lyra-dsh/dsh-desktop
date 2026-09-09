@@ -1,0 +1,29 @@
+{
+  "name": "@omnilyra/lyra-dsh-protocol",
+  "version": "0.2.0",
+  "description": "Framework-agnostic desktop shell protocol (interface + events) for dsh desktop plugins.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/lyra-dsh/dsh-desktop.git"
+  }
+}

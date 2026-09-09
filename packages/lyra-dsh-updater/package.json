@@ -1,0 +1,22 @@
+{
+  "name": "@omnilyra/lyra-dsh-updater",
+  "version": "0.2.0",
+  "description": "Framework-agnostic update core (state machine + targets) for the desktop shell.",
+  "main": "src/index.js",
+  "files": [
+    "src"
+  ],
+  "dependencies": {
+    "electron-updater": "^6.6.2",
+    "semver": "^7.6.0"
+  },
+  "peerDependencies": {
+    "@omnilyra/lyra-dsh-protocol": "^0.2.0",
+    "electron": ">=28"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/lyra-dsh/dsh-desktop.git"
+  }
+}

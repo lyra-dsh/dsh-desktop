@@ -1,4 +1,4 @@
-# dsh-desktop
+# lyra-dsh
 
 A **generic desktop shell** for the [dsh](https://github.com/deepseek-ai/deepseek-harness)
 web UI: wrap any dsh in a native [Electron](https://www.electronjs.org/) window
@@ -35,7 +35,7 @@ npm test           # unit tests (node --test)
 > The Electron binary is downloaded lazily on the first `npm run dev`/`build`
 > (Electron no longer ships a postinstall script). It needs network access once.
 
-Without any config the app runs: `dsh --profile web --host 127.0.0.1 --no-open`.
+Without any config the app runs: `dsh --profile lyra-dsh --host 127.0.0.1 --no-open`.
 
 ## How dsh is found and run
 
@@ -77,21 +77,20 @@ else entirely (handy for testing). Missing keys fall back to the same defaults.
 
 ```jsonc
 {
-  "profile": "web",        // dsh profile to boot (expects a web-serving profile)
+  "profile": "lyra-dsh",   // dedicated dsh profile (data shared at DSH_HOME level, plugins isolated)
   "dshBin": null,          // null = auto (system first, then private install); a path/command = spawn that external dsh instead
   "host": "127.0.0.1",     // --host for the web surface
   "port": 0,               // 0=OS auto-assign (default, avoids port conflicts); a number pins it; null=dsh's own default
   "openBrowser": false,    // false → append --no-open (keeps the UI in-window)
-  "notify": true,          // true → OS notification when the agent finishes a turn or needs approval
-  "extraArgs": [],         // extra dsh args, appended verbatim (e.g. ["--trusted-host","app.internal"])
-  "editor": null           // reserved; not consumed yet
+  "notify": true,          // true → bootstrap desktop plugins + OS notification
+  "extraArgs": []          // extra dsh args, appended verbatim (e.g. ["--trusted-host","app.internal"])
 }
 ```
 
 Resulting argv (defaults shown):
 
 ```text
-dsh --profile web --patch <userData>/dsh-desktop.patch.yml --host 127.0.0.1 --port 0 --no-open [extraArgs...]
+dsh --profile lyra-dsh --host 127.0.0.1 --port 0 --no-open [extraArgs...]
 ```
 
 ## Desktop integration plugins
@@ -101,23 +100,28 @@ agent **finishes a turn** or when it **needs your approval**. It does this by
 loading a few of the shell's own cordis plugins into dsh and talking over the
 parent–child IPC channel (dsh is the shell's child process):
 
-1. On startup the shell copies the `@omnilyra/desktop-*` plugins into dsh's profile
-   `node_modules` and writes `dsh-desktop.patch.yml` — a `--patch` overlay that inserts
-   them. The shell then launches dsh with that patch and an extra `ipc` stdio channel.
+1. On startup the shell bootstraps its dedicated profile (`lyra-dsh`) by running
+   `dsh plugin --profile lyra-dsh add @omnilyra/lyra-dsh-bridge`. The bridge package
+   declares `dsh.bundle`, so `dsh plugin` reconciles it into the profile's
+   `dsh.profile.bundles` — one command installs *and* activates the desktop plugins.
+   The shell then launches dsh with an extra `ipc` stdio channel.
 2. Inside dsh:
-   - `desktop-host` provides `ctx.desktopRuntime` as a proxy whose method calls are
-     serialized over `process.send` (the IPC channel).
-   - `desktop-notifications` subscribes to session/approval events and calls
+   - `lyra-dsh-bridge` provides `ctx.desktopRuntime` as a proxy whose method calls are
+     serialized over `process.send` (the IPC channel). Its bundle patch inserts itself
+     plus the three feature plugins below.
+   - `lyra-dsh-notifications` subscribes to session/approval events and calls
      `ctx.desktopRuntime.notify(...)`.
-   - `desktop-badge` sets the tray status dot (`ctx.desktopRuntime.setBadge(...)`).
-   - `desktop-keep-awake` keeps the machine awake while turns run
+   - `lyra-dsh-badge` sets the tray status dot (`ctx.desktopRuntime.setBadge(...)`).
+   - `lyra-dsh-keep-awake` keeps the machine awake while turns run
      (`ctx.desktopRuntime.setKeepAwake(...)`).
 3. The shell's main process receives the `invoke` message and runs the matching
    `ElectronDesktopRuntime` method — shell-owned notifications, tray dots, and power
-   management.
+   management. Only whitelisted `DesktopCapabilities` methods are forwarded (see
+   `app/src/policy.js`); shell-lifecycle methods are never reachable from dsh.
 
-The plugins live outside dsh's profile bundles, so dsh stays a black-box wrapper —
-system or private. Set `notify: false` to disable the notifications.
+The desktop plugins ride the profile's `bundles` layer (no `--patch` overlay), so dsh
+stays a black-box wrapper — system or private. Set `notify: false` to skip the
+bootstrap and notifications.
 
 ### Tray status dot
 
@@ -169,19 +173,21 @@ actually keeping the machine awake.
 
 The shell is layered so it can wrap *any* dsh (or a custom dsh you build on it)
 without depending on dsh itself. See [`DESIGN.md`](DESIGN.md) for the full
-design, the `DesktopRuntime` protocol, multi-window, and the plugin roadmap.
+design, the `DesktopCapabilities` protocol, and the plugin roadmap.
 For how **other projects** reuse the shell, notifications, and updater
 components, see [`INTEGRATION.md`](INTEGRATION.md).
 
 ```
 packages/
-  desktop-protocol/      zero-dependency interfaces (DesktopRuntime, DesktopEvent, DesktopTransport)
-  desktop-host/          cordis plugin: provides ctx.desktopRuntime over the child-process IPC channel
-  desktop-electron/      Electron implementation of DesktopRuntime
-  desktop-notifications/ cordis plugin: session/approval events → ctx.desktopRuntime.notify
-  desktop-badge/         cordis plugin: session state → ctx.desktopRuntime.setBadge (tray dot)
-  desktop-keep-awake/    cordis plugin: running turns → ctx.desktopRuntime.setKeepAwake
-app/                     composition root: resolve dsh → spawn (with ipc) → window/tray + IPC dispatch
+  lyra-dsh-protocol/      zero-dependency interfaces (DesktopCapabilities, DesktopShellLifecycle, DesktopEvent)
+  lyra-dsh-bridge/        dsh bundle + cordis plugin: provides ctx.desktopRuntime over child-process IPC
+  lyra-dsh-electron/      Electron implementation (DesktopCapabilities + overlay state surface)
+  lyra-dsh-notifications/ cordis plugin: session/approval events → ctx.desktopRuntime.notify
+  lyra-dsh-badge/         cordis plugin: session state → ctx.desktopRuntime.setBadge (tray dot)
+  lyra-dsh-keep-awake/    cordis plugin: running turns → ctx.desktopRuntime.setKeepAwake
+  lyra-dsh-updater/       framework-agnostic update core (state machine + targets)
+  lyra-dsh-backend/       dsh provisioning: resolve / bootstrap / version-gate / spawn
+app/                     composition root: bootstrap → spawn dsh (ipc) → window/tray + IPC dispatch
 ```
 
 ## Troubleshooting
@@ -198,7 +204,7 @@ app/                     composition root: resolve dsh → spawn (with ipc) → 
 
 ## Not in scope (yet)
 
-Settings UI, native file/directory pickers, download interception, auto-update,
-and hosting OAuth popups. Multiple concurrent instances are not coordinated —
-run one at a time, or set `port` to a distinct value / `0`. Universal
+Settings UI, download interception, and hosting OAuth popups. Universal
 (arm64 + x64) macOS builds and code signing/notarization are follow-ups.
+A single-instance lock coordinates concurrent launches (the second instance
+hands focus to the first).

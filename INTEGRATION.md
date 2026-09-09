@@ -1,6 +1,6 @@
 # 集成指南：其他项目如何复用壳子、通知与更新组件
 
-本文面向「想拿这套东西做自己的 dsh 壳子」的项目。dsh-desktop 不是单一应用，而是一层
+本文面向「想拿这套东西做自己的 dsh 壳子」的项目。lyra-dsh 不是单一应用，而是一层
 **框架无关的桌面壳子 SDK** + 一个 **Electron 参考实现**。你既可以整壳 fork（改配置/图标/名字
 就是一个新产品），也可以只挑几个 SDK 包复用到自己的壳子里。
 
@@ -16,27 +16,28 @@
 ```
 ┌────────────────────────────────────────────────────────────────┐
 │ 功能插件层（跑在 dsh 进程内，Cordis 插件）                        │
-│   desktop-notifications / desktop-badge / desktop-keep-awake     │
+│   lyra-dsh-notifications / lyra-dsh-badge / lyra-dsh-keep-awake     │
 │   统一通过 ctx.desktopRuntime 调壳子能力                          │
 ├────────────────────────────────────────────────────────────────┤
-│ Host 适配层 desktop-host（跑在 dsh 进程内）                       │
+│ Bridge 适配层 lyra-dsh-bridge（跑在 dsh 进程内）                     │
 │   把「壳子能力」以 IPC 代理注册成 ctx.desktopRuntime              │
 ├────────────────────────────────────────────────────────────────┤
-│ 协议层 desktop-protocol（纯类型，零依赖，两边共享）                │
-│   DesktopRuntime（能力接口）/ DesktopEvent（事件）/ DesktopTransport │
+│ 协议层 lyra-dsh-protocol（纯类型，零依赖，两边共享）                │
+│   DesktopCapabilities（能力接口）/ DesktopEvent（事件）/ DesktopTransport │
 ├────────────────────────────────────────────────────────────────┤
 │ 实现层 + 主进程模块（跑在壳子进程内，Electron）                   │
-│   desktop-electron（ElectronDesktopRuntime）                     │
-│   desktop-updater（升级状态机 + 目标，主进程模块）                 │
+│   lyra-dsh-electron（ElectronDesktopRuntime）                     │
+│   lyra-dsh-updater（升级状态机 + 目标，主进程模块）                 │
 └────────────────────────────────────────────────────────────────┘
         组装根 app/（跑在壳子进程内）：spawn dsh → IPC 分发 → 决策
 ```
 
 两个关键点：
 
-1. **`desktop-notifications` 等是 dsh 内的 Cordis 插件**，不是壳子代码。它们被 `--patch`
-   注入进 dsh，只依赖一个服务：`ctx.desktopRuntime`（由 `desktop-host` 提供）。
-2. **`desktop-electron`、`desktop-updater` 是壳子主进程模块**，在你的组装根里
+1. **`lyra-dsh-notifications` 等是 dsh 内的 Cordis 插件**，不是壳子代码。它们由
+   `lyra-dsh-bridge` 的 bundle patch 挂进 dsh（`dsh plugin add` 安装 + 激活），只依赖一个
+   服务：`ctx.desktopRuntime`（由 `lyra-dsh-bridge` 提供）。
+2. **`lyra-dsh-electron`、`lyra-dsh-updater` 是壳子主进程模块**，在你的组装根里
    `require` 后接线，不进入 dsh。
 
 依赖只朝下（指向协议），所以换掉 Electron（用 Tauri 等）只需重写「实现层」，插件和协议
@@ -51,29 +52,29 @@
 - **A. 整壳 fork（推荐起步）**：把 `app/` 当模板，改三处——`app/package.json` 里的
   `name`/`appId`/`productName`/`build.publish`、`app/build/` 的图标、`app/src/main.js`
   里的产品名/窗口尺寸/托盘文案。dsh 供给、窗口、托盘、IPC、升级这些通用逻辑都是现成的。
-- **B. 只复用 SDK 包**：自己写组装根，只 `require` 你需要的包（`desktop-electron`、
-  `desktop-host`、`desktop-updater`、若干功能插件），自己 spawn dsh、自己接线。
+- **B. 只复用 SDK 包**：自己写组装根，只 `require` 你需要的包（`lyra-dsh-electron`、
+  `lyra-dsh-bridge`、`lyra-dsh-updater`、若干功能插件），自己 spawn dsh、自己接线。
 
-### 2.2 协议核心：`DesktopRuntime`
+### 2.2 协议核心：`DesktopCapabilities`
 
-所有壳子能力都在 `packages/desktop-protocol/src/runtime.ts` 的一个接口里。功能插件
-（dsh 内）看到的 `ctx.desktopRuntime` 就是它；Electron 侧 `ElectronDesktopRuntime`
-实现了它。方法一览：
+所有壳子能力都在 `packages/lyra-dsh-protocol/src/runtime.ts` 的两个接口里
+（`DesktopCapabilities` 跨进程能力面 + `DesktopShellLifecycle` 组装根专用）。功能插件
+（dsh 内）看到的 `ctx.desktopRuntime` 是 `DesktopCapabilities`；Electron 侧
+`ElectronDesktopRuntime` 实现了它。方法一览（跨进程能力面）：
 
 | 分组 | 方法 |
 |---|---|
 | 主窗口 | `show()` `hide()` `reload()` `setTitle(title)` |
-| 多窗口 | `openWindow(spec) → handle` `getWindow(id)` |
-| 托盘 | `setTray(items)` |
+| 托盘 | `addTrayItem(item) → token` `removeTrayItem(token)` |
 | 通知 | `notify({title, body, sound?})` |
-| 状态点 | `setBadge('error'\|'approval'\|'unread')` |
-| 电源 | `setKeepAwake(enabled)` |
+| 状态点 | `setBadge('none'\|'info'\|'attention'\|'error')` |
+| 电源 | `setKeepAwake(active, refId?)` |
 | 对话框 | `pickDirectory(opts)` `showMessageBox(opts)` |
 | 外部 | `openExternal(url)` |
 | 外观 | `setTheme(source)` `setLocale(locale)` |
 | 升级 | `checkForUpdates()` `downloadUpdate()` `quitAndInstall()` `getUpdateStatus()` |
-| 生命周期 | `quit()` `restart()` `prepareToQuit()` |
-| 事件 | `subscribe(listener)` —— 壳子 → Host 的事件流 |
+| 生命周期 | `requestQuit()` `requestRestart()` |
+| 事件 | `subscribe(listener)` —— 壳子 → 组装根 的事件流 |
 
 事件（`DesktopEvent`）：`tray/activated`、`tray/item-activated`、`window/visibility`、
 `window/close-requested`、`quit/requested`、`renderer/boot`、`theme/changed`、`update/state`。
@@ -97,23 +98,22 @@ child.on('message', (msg) => { /* invoke → runtime[msg.method](...) */ })
 runtime.subscribe((event) => { /* 决策：关闭→隐藏、退出→杀 dsh…… */ })
 ```
 
-dsh 供给顺序与兜底安装逻辑在 `app/src/dsh.js`；插件注入（复制 `@omnilyra/*` 进 profile
-`node_modules` + 写 `--patch`）在 `app/src/plugins.js`。这两块都是「通用壳子」的公共部分，
-fork 时通常原样保留。
+dsh 供给顺序与兜底安装逻辑、版本闸门（`DSH_RANGE`）、profile 引导（`dsh plugin add` 安装
+bundle）都在 `packages/lyra-dsh-backend/`。这块是「通用壳子」的公共部分，fork 时通常原样保留。
 
 ### 2.4 IPC 通道（我们自己的通道，不碰 dsh 的 web server）
 
 dsh 是壳子的子进程，用 Node 自带的 `child_process` IPC 通信：
 
 ```
-dsh 进程      desktop-host：process.send({type:'invoke', id, method, args})
+dsh 进程      lyra-dsh-bridge：process.send({type:'invoke', id, method, args})
 壳子主进程    child.on('message') → runtime[method](...args) → child.send({type:'result', ...})
-壳子→dsh 事件 child.send({type:'event', event}) → desktop-host onEvent → ctx.desktopRuntime.subscribe
+壳子→dsh 事件 child.send({type:'event', event}) → lyra-dsh-bridge onEvent → ctx.desktopRuntime.subscribe
 ```
 
 ---
 
-## 3. 通知组件（desktop-notifications）怎么用
+## 3. 通知组件（lyra-dsh-notifications）怎么用
 
 ### 3.1 它做什么
 
@@ -132,8 +132,8 @@ dsh 进程      desktop-host：process.send({type:'invoke', id, method, args})
 
 ```js
 module.exports = {
-  name: 'desktop-notifications',
-  inject: ['desktopRuntime'],   // 由 desktop-host 提供
+  name: 'lyra-dsh-notifications',
+  inject: ['desktopRuntime'],   // 由 lyra-dsh-bridge 提供
   apply(ctx) { /* ctx.on(...) → ctx.desktopRuntime.notify({title, body, sound}) */ },
 }
 ```
@@ -143,11 +143,12 @@ module.exports = {
 
 ### 3.3 接入到你自己的项目
 
-1. 把 `@omnilyra/desktop-host`、`@omnilyra/desktop-notifications` 复制进你 dsh profile 的
-   `node_modules`，并写进 `--patch`（参考 `app/src/plugins.js` 的 `PLUGINS` 数组和
-   `patchContent()`，把两个名字加进去即可）。
+1. 用 `dsh plugin --profile <你的 profile> add @omnilyra/lyra-dsh-bridge` 装 bridge。
+   bridge 声明了 `dsh.bundle`，`dsh plugin` 会自动把它写进 profile 的 `bundles` 并连带
+   安装 3 个功能插件（notifications / badge / keep-awake）——一条命令完成安装 + 激活。
 2. 壳子侧 spawn dsh 时带 `ipc` stdio 通道，并在 `child.on('message')` 里把 `invoke`
-   分发到 `runtime[method]`（参考 `app/src/main.js`）。
+   分发到 `runtime[method]`（参考 `app/src/main.js`；方法名以 `DesktopCapabilities`
+   白名单为准，见 `app/src/policy.js`）。
 3. 壳子侧 `ElectronDesktopRuntime.notify()` 已经实现好了，无需再写。
 
 ### 3.4 自定义你自己的通知（或别的桌面能力）
@@ -163,7 +164,7 @@ module.exports = {
     ctx.on('session/event', (session, event) => {
       if (event?.type === 'turn/end') ctx.desktopRuntime.notify({ title: '……', body: '……' })
     })
-    // 或直接：ctx.desktopRuntime.setBadge('approval')
+    // 或直接：ctx.desktopRuntime.setBadge('attention')
   },
 }
 ```
@@ -173,16 +174,16 @@ module.exports = {
 
 ---
 
-## 4. 更新组件（desktop-updater）怎么用
+## 4. 更新组件（lyra-dsh-updater）怎么用
 
-`@omnilyra/desktop-updater` 是**壳子主进程模块**（不在 dsh 内），它把「升级」拆成
+`@omnilyra/lyra-dsh-updater` 是**壳子主进程模块**（不在 dsh 内），它把「升级」拆成
 **一个状态机 + 若干可插拔目标（target）**。这是通用性的关键：**升级什么、从哪升级、
 怎么装，全部由你（产品）配置，SDK 不写死**。
 
 ### 4.1 状态机
 
 ```js
-const { createUpdater } = require('@omnilyra/desktop-updater')
+const { createUpdater } = require('@omnilyra/lyra-dsh-updater')
 
 const updater = createUpdater({ targets: [...], autoDownload: true })
 updater.subscribe((status) => console.log(status))
@@ -209,7 +210,7 @@ updater.getStatus()     // 当前状态快照
 
 ```js
 const { createUpdater, createFeedTarget, createElectronUpdaterTarget, createNpmPackageTarget } =
-  require('@omnilyra/desktop-updater')
+  require('@omnilyra/lyra-dsh-updater')
 
 function buildUpdater(cfg, entry, dshVer, dshMode, state, runtime) {
   const targets = []
@@ -291,23 +292,23 @@ updater.subscribe(async (status) => {
 
 | 包 | 跑在哪 | 注入 | 做什么 | 调用的 runtime 方法 |
 |---|---|---|---|---|
-| `desktop-notifications` | dsh 内 | `['desktopRuntime']` | 会话完成/出错/审批/提问 → 系统通知 | `notify` |
-| `desktop-badge` | dsh 内 | `['desktopRuntime']` | 会话状态 → 托盘红/黄/绿点 | `setBadge` |
-| `desktop-keep-awake` | dsh 内 | `['desktopRuntime']` | 运行时防休眠（允许息屏） | `setKeepAwake` |
-| `desktop-host` | dsh 内 | 无（提供服务） | 把壳子能力以 IPC 代理注册成 `ctx.desktopRuntime` | （提供者） |
-| `desktop-electron` | 壳子主进程 | 无 | `ElectronDesktopRuntime` 实现协议 | （实现者） |
-| `desktop-updater` | 壳子主进程 | 无 | 升级状态机 + 目标 | 协议升级方法 |
+| `lyra-dsh-notifications` | dsh 内 | `['desktopRuntime']` | 会话完成/出错/审批/提问 → 系统通知 | `notify` |
+| `lyra-dsh-badge` | dsh 内 | `['desktopRuntime']` | 会话状态 → 托盘红/黄/绿点 | `setBadge` |
+| `lyra-dsh-keep-awake` | dsh 内 | `['desktopRuntime']` | 运行时防休眠（允许息屏） | `setKeepAwake` |
+| `lyra-dsh-bridge` | dsh 内 | 无（提供服务） | 把壳子能力以 IPC 代理注册成 `ctx.desktopRuntime` | （提供者） |
+| `lyra-dsh-electron` | 壳子主进程 | 无 | `ElectronDesktopRuntime` 实现协议 | （实现者） |
+| `lyra-dsh-updater` | 壳子主进程 | 无 | 升级状态机 + 目标 | 协议升级方法 |
 
 ---
 
 ## 6. 常见问题
 
-- **Q：我的壳子不是 Electron，能用吗？** 能。协议层（`desktop-protocol`）是纯类型零依赖，
-  你按 `DesktopRuntime` 写一个自己的实现（比如 Tauri），插件和 Host 层都不用改。
-- **Q：我不想用 `--patch` 注入，能直接在 dsh 里装吗？** 能，`--patch` 只是这个壳子选用的
-  注入方式；任何能把 `@omnilyra/desktop-host` 挂进 dsh 的机制（`dsh.client`/profile 依赖）都行。
-- **Q：通知没弹？** 依次检查：壳子 spawn dsh 时带了 `ipc` stdio；`desktop-host` 和
-  `desktop-notifications` 都进了 `--patch`；壳子侧 `child.on('message')` 把 `invoke` 分发到
+- **Q：我的壳子不是 Electron，能用吗？** 能。协议层（`lyra-dsh-protocol`）是纯类型零依赖，
+  你按 `DesktopCapabilities` 写一个自己的实现（比如 Tauri），插件和 Bridge 层都不用改。
+- **Q：我不想用 `dsh plugin` 注入，能直接在 dsh 里装吗？** 能，`dsh plugin` 只是这个壳子选用的
+  注入方式；任何能把 `@omnilyra/lyra-dsh-bridge` 挂进 dsh 的机制（`dsh.client`/profile 依赖）都行。
+- **Q：通知没弹？** 依次检查：壳子 spawn dsh 时带了 `ipc` stdio；`lyra-dsh-bridge` 进了
+  profile 的 `bundles`（`dsh plugin add` 成功）；壳子侧 `child.on('message')` 把 `invoke` 分发到
   `runtime[method]`；macOS 上通知需要系统授权（首次会问）。
 - **Q：升级想完全关掉？** 配 `"updater": { "enabled": false }` 即可（`buildUpdater` 返回 null）。
 - **Q：升级目标怎么加一个？** 实现一个 `{id,label,currentVersion,check,download,install}`

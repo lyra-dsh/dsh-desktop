@@ -1,0 +1,17 @@
+{
+  "name": "@omnilyra/lyra-dsh-backend",
+  "version": "0.2.0",
+  "description": "dsh provisioning + profile bootstrap layer for the desktop shell.",
+  "main": "src/index.js",
+  "files": [
+    "src"
+  ],
+  "dependencies": {
+    "semver": "^7.6.0"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/lyra-dsh/dsh-desktop.git"
+  }
+}

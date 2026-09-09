@@ -4,7 +4,7 @@ const test = require('node:test')
 const assert = require('node:assert')
 const fs = require('node:fs')
 const path = require('node:path')
-const dsh = require('../src/dsh')
+const dsh = require('@omnilyra/lyra-dsh-backend')
 const config = require('../src/config')
 
 test('resolveFallbackPort: null -> 3080', () => {
@@ -80,7 +80,7 @@ test('buildEnv passes through the full environment and overrides PATH', () => {
 test('buildArgs puts launcher flags (--patch) before app flags (--host)', () => {
   const args = dsh.buildArgs({ ...config.DEFAULT_CONFIG }, ['--patch', '/tmp/x.yml'])
   // --profile <name> 之后紧跟启动器 flag，然后才是 --host
-  assert.deepStrictEqual(args.slice(0, 4), ['--profile', 'web', '--patch', '/tmp/x.yml'])
+  assert.deepStrictEqual(args.slice(0, 4), ['--profile', 'lyra-dsh', '--patch', '/tmp/x.yml'])
   assert.strictEqual(args[4], '--host')
 })
 

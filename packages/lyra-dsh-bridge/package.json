@@ -1,0 +1,29 @@
+{
+  "name": "@omnilyra/lyra-dsh-bridge",
+  "version": "0.2.0",
+  "description": "Cordis plugin + dsh bundle: provides ctx.desktopRuntime as an IPC-backed proxy (child-process transport).",
+  "main": "src/index.js",
+  "files": [
+    "src",
+    "cordis.patch.yml"
+  ],
+  "dependencies": {
+    "@deepseek-ai/cordis": "^4.0.2",
+    "@omnilyra/lyra-dsh-notifications": "^0.2.0",
+    "@omnilyra/lyra-dsh-badge": "^0.2.0",
+    "@omnilyra/lyra-dsh-keep-awake": "^0.2.0"
+  },
+  "peerDependencies": {
+    "@omnilyra/lyra-dsh-protocol": "^0.2.0"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/lyra-dsh/dsh-desktop.git"
+  }
+}

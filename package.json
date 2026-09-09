@@ -1,5 +1,5 @@
 {
-  "name": "dsh-desktop",
+  "name": "lyra-dsh",
   "version": "0.2.0",
   "description": "Monorepo: framework-agnostic desktop shell protocol + Electron implementation + dsh desktop plugins.",
   "private": true,
@@ -12,6 +12,7 @@
     "dev": "npm run dev --workspace app",
     "package:dir": "npm run package:dir --workspace app",
     "build": "npm run build --workspace app",
-    "test": "npm run test --workspace app"
+    "test": "npm run test --workspace app",
+    "contract": "node app/scripts/contract.js"
   }
 }

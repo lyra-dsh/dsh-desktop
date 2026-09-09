@@ -1,0 +1,9 @@
+- insert:
+    - id: lyra-dsh-bridge
+      name: '@omnilyra/lyra-dsh-bridge'
+    - id: lyra-dsh-notifications
+      name: '@omnilyra/lyra-dsh-notifications'
+    - id: lyra-dsh-badge
+      name: '@omnilyra/lyra-dsh-badge'
+    - id: lyra-dsh-keep-awake
+      name: '@omnilyra/lyra-dsh-keep-awake'

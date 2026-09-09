@@ -14,3 +14,6 @@ config.json
 .diag
 # e2e temp dsh homes
 .e2e-*
+
+# protocol build output
+dist/

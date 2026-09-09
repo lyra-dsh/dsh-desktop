@@ -1,0 +1,18 @@
+{
+  "name": "@omnilyra/lyra-dsh-notifications",
+  "version": "0.2.0",
+  "description": "Desktop feature plugin: native notifications.",
+  "main": "src/notifications.js",
+  "files": [
+    "src"
+  ],
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.2",
+    "@omnilyra/lyra-dsh-protocol": "^0.2.0"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/lyra-dsh/dsh-desktop.git"
+  }
+}
